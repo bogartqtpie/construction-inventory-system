@@ -87,34 +87,20 @@ def create_app():
         if request.method == 'POST':
             reorder_qty = float(request.form.get('reorder_qty', 0))
             if reorder_qty <= 0:
-                return render_template(
-                    'reorder.html',
-                    material=material,
-                    suppliers=suppliers,
-                    error="Please enter a valid quantity.",
-                    low_count=len(get_low_stock())
-                )
+                return render_template('reorder.html', material=material, suppliers=suppliers, error="Please enter a valid quantity.", low_count=len(get_low_stock()))
 
             material.quantity += reorder_qty
             db.session.commit()
             return redirect(url_for('inventory'))
 
-        return render_template(
-            'reorder.html',
-            material=material,
-            suppliers=suppliers,
-            low_count=len(get_low_stock())
-        )
+        return render_template('reorder.html', material=material, suppliers=suppliers, low_count=len(get_low_stock()))
 
     # ---------------- SUPPLIERS ----------------
     @app.route('/suppliers', methods=['GET', 'POST'])
     def suppliers():
         if request.method == 'POST':
-            s = Supplier(
-                name=request.form['name'],
-                contact=request.form.get('contact'),
-                address=request.form.get('address')
-            )
+            s = Supplier(name=request.form['name'], contact=request.form.get(
+                'contact'), address=request.form.get('address'))
             db.session.add(s)
             db.session.commit()
             return redirect(url_for('suppliers'))
@@ -139,13 +125,9 @@ def create_app():
         db.session.commit()
         return redirect(url_for('suppliers'))
 
-    # ---------------- CHECKOUT / POINT OF SALE ----------------
+    # ---------------- CHECKOUT / SALES ----------------
     @app.route("/checkout", methods=["POST"])
     def checkout():
-        """
-        Expects JSON: { "cart": [ { "id": "<material id>", "qty": <number>, "price": <number> }, ... ] }
-        Returns JSON: { "success": True/False, "updated_inventory": [...] }
-        """
         data = request.get_json(silent=True) or {}
         cart = data.get("cart", [])
 
@@ -159,12 +141,7 @@ def create_app():
             total_amount = 0.0
 
             for item in cart:
-                # robust parsing: support 'id' as str/int; support 'qty' or 'quantity'; 'price' or 'price_per_unit'
-                try:
-                    material_id = int(item.get("id"))
-                except Exception:
-                    return jsonify({"success": False, "message": "Invalid material id in cart."})
-
+                material_id = int(item.get("id"))
                 qty = float(item.get("qty", item.get("quantity", 0)))
                 price = float(item.get("price", item.get("price_per_unit", 0)))
 
@@ -172,41 +149,26 @@ def create_app():
                 if not material:
                     return jsonify({"success": False, "message": f"Material with ID {material_id} not found."})
 
-                # Check stock
                 if material.quantity < qty:
                     return jsonify({"success": False, "message": f"Not enough stock for {material.name}. Available: {material.quantity}"})
 
-                # Deduct stock
                 material.quantity -= qty
                 if material.quantity < 0:
                     material.quantity = 0
 
-                # Create SaleItem (fields: qty, price)
                 sale_item = SaleItem(
-                    sale_id=sale.id,
-                    material_id=material.id,
-                    qty=qty,
-                    price=price
-                )
+                    sale_id=sale.id, material_id=material.id, qty=qty, price=price)
                 db.session.add(sale_item)
-
                 total_amount += qty * price
 
             sale.total = total_amount
             db.session.commit()
 
-            # Build updated inventory to send back to frontend (quick inventory refresh)
             updated_inventory = [
-                {
-                    "id": m.id,
-                    "name": m.name,
-                    "quantity": m.quantity,
-                    "unit": m.unit,
-                    "reorder_point": m.reorder_point
-                }
+                {"id": m.id, "name": m.name, "quantity": m.quantity,
+                    "unit": m.unit, "reorder_point": m.reorder_point}
                 for m in Material.query.order_by(Material.name).all()
             ]
-
             return jsonify({"success": True, "updated_inventory": updated_inventory})
 
         except Exception as e:
@@ -233,10 +195,7 @@ def create_app():
             writer.writerow(
                 [s.id, s.date.strftime("%Y-%m-%d %H:%M:%S"), s.total])
         output.seek(0)
-        return send_file(io.BytesIO(output.getvalue().encode('utf-8')),
-                         mimetype='text/csv',
-                         as_attachment=True,
-                         download_name='sales_export.csv')
+        return send_file(io.BytesIO(output.getvalue().encode('utf-8')), mimetype='text/csv', as_attachment=True, download_name='sales_export.csv')
 
     # ---------------- NOTIFICATIONS ----------------
     @app.route('/notifications')
@@ -246,12 +205,8 @@ def create_app():
         low_with_prediction = []
         for m in low:
             days = predict_depletion_days(m)
-            low_with_prediction.append({
-                "id": m.id,
-                "name": m.name,
-                "qty": m.quantity,
-                "pred_days": days
-            })
+            low_with_prediction.append(
+                {"id": m.id, "name": m.name, "qty": m.quantity, "pred_days": days})
         return render_template('notifications.html', low=low_with_prediction, low_count=len(low_with_prediction))
 
     # ---------------- SETTINGS & ABOUT ----------------
@@ -266,8 +221,10 @@ def create_app():
     return app
 
 
+# ✅ Expose the app instance for Render
+app = create_app()
+
 if __name__ == '__main__':
-    app = create_app()
     with app.app_context():
         db.create_all()
     app.run(debug=True)
