@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <title>{{ title if title else 'Construction Inventory POS' }}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- ✅ Bootstrap 5.3 -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+
+    <!-- ✅ Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+
+    <!-- ✅ Custom Styles -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+
+        .navbar {
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+        }
+
+        .navbar-dark .nav-link {
+            transition: color 0.2s ease-in-out;
+        }
+
+        .navbar-dark .nav-link:hover {
+            color: #ffc107;
+        }
+
+        .container {
+            padding: 2rem 1rem;
+        }
+
+        .badge {
+            font-size: 0.75rem;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- ✅ Navigation Bar -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid px-4">
+            <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="{{ url_for('index') }}">
+                <i class="bi bi-hammer"></i> Inventory POS
+            </a>
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navmenu"
+                aria-controls="navmenu" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+
+            <div class="collapse navbar-collapse" id="navmenu">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    {% set nav_items = [
+                    ('inventory', 'Inventory', 'bi-box-seam'),
+                    ('sales', 'Sales', 'bi-cash-stack'),
+                    ('suppliers', 'Suppliers', 'bi-truck'),
+                    ('settings', 'Settings', 'bi-gear'),
+                    ('about', 'About', 'bi-info-circle')
+                    ] %}
+                    {% for endpoint, label, icon in nav_items %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.endpoint == endpoint %}active{% endif %}"
+                            href="{{ url_for(endpoint) }}">
+                            <i class="bi {{ icon }}"></i> {{ label }}
+                        </a>
+                    </li>
+                    {% endfor %}
+                </ul>
+
+                <ul class="navbar-nav">
+                    <li class="nav-item position-relative">
+                        <a class="nav-link" href="{{ url_for('notifications') }}">
+                            <i class="bi bi-bell"></i> Notifications
+                            {% if low_count and low_count > 0 %}
+                            <span
+                                class="badge bg-danger rounded-pill position-absolute top-0 start-100 translate-middle">
+                                {{ low_count }}
+                            </span>
+                            {% endif %}
+                        </a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ✅ Main Content -->
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- ✅ Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="{{ url_for('static', filename='js/pos.js') }}"></script>
+</body>
+
+</html>

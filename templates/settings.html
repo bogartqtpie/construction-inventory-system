@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+    <div class="card shadow-sm border-0">
+        <div class="card-header bg-dark text-white d-flex align-items-center">
+            <i class="bi bi-gear me-2"></i>
+            <h5 class="mb-0">Settings</h5>
+        </div>
+
+        <div class="card-body">
+            <p class="text-muted">
+                No advanced settings yet. Future versions may include options to manage:
+            </p>
+            <ul class="list-group list-group-flush mb-3">
+                <li class="list-group-item"><i class="bi bi-person-gear me-2 text-secondary"></i> User Accounts & Roles
+                </li>
+                <li class="list-group-item"><i class="bi bi-building me-2 text-secondary"></i> Company Information</li>
+                <li class="list-group-item"><i class="bi bi-box-seam me-2 text-secondary"></i> Default Reorder Levels
+                </li>
+                <li class="list-group-item"><i class="bi bi-bell me-2 text-secondary"></i> Notification Preferences</li>
+            </ul>
+            <p class="text-secondary fst-italic small">
+                This section is under development — upcoming updates will allow customization of your system
+                preferences.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}
