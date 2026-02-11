@@ -161,18 +161,23 @@ def create_app():
     def sales_export():
         sales_list = Sale.query.order_by(Sale.date.desc()).all()
         output = io.StringIO()
-        writer = csv.writer(output)
+        writer = csv.writer(output, delimiter=',',
+                            quotechar='"', quoting=csv.QUOTE_MINIMAL)
         writer.writerow(['Sale ID', 'Date', 'Total (₱)', 'Items'])
         for sale in sales_list:
             items = ', '.join(
-                [f"{i.material_ref.name} × {i.qty}" for i in sale.items])
+                [f"{i.material.name} × {i.qty}" for i in sale.items])
             writer.writerow([sale.id, sale.date.strftime(
                 "%Y-%m-%d %H:%M:%S"), f"₱{sale.total:.2f}", items])
-        output.seek(0)
-        return send_file(io.BytesIO(output.getvalue().encode('utf-8')),
-                         mimetype='text/csv',
-                         as_attachment=True,
-                         download_name='sales_export.csv')
+
+        data = output.getvalue().encode('utf-16')  # UTF-16 for Excel Windows
+
+        return send_file(
+            io.BytesIO(data),
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name='sales_export.csv'
+        )
 
     # ---------------- CHECKOUT ----------------
     @app.route('/checkout', methods=['POST'])
@@ -267,7 +272,6 @@ def create_app():
 
     @app.route('/reset/full', methods=['POST'])
     def full_reset():
-        # Remove all data
         SaleItem.query.delete()
         Sale.query.delete()
         UsageLog.query.delete()

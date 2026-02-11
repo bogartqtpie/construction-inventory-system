@@ -1,11 +1,10 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 
+# 1️⃣ Initialize SQLAlchemy
 db = SQLAlchemy()
 
- 
-# Supplier Model
- 
+# ---------------- Supplier Model ----------------
 
 
 class Supplier(db.Model):
@@ -14,7 +13,6 @@ class Supplier(db.Model):
     contact = db.Column(db.String(150))
     address = db.Column(db.String(250))
 
-    # materials & reorder requests linked to this supplier — cascade delete
     materials = db.relationship(
         "Material",
         backref=db.backref("supplier", lazy=True),
@@ -30,10 +28,9 @@ class Supplier(db.Model):
     def __repr__(self):
         return f"<Supplier {self.name}>"
 
+# ---------------- Material Model ----------------
 
- 
-# Material Model
- 
+
 class Material(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False, unique=True)
@@ -45,10 +42,8 @@ class Material(db.Model):
     subtotal = db.Column(db.Float)
 
     supplier_id = db.Column(
-        db.Integer, db.ForeignKey("supplier.id"), nullable=True
-    )
+        db.Integer, db.ForeignKey("supplier.id"), nullable=True)
 
-    # CASCADE DELETE for dependent rows
     usage_logs = db.relationship(
         "UsageLog",
         backref=db.backref("material_ref", lazy=True),
@@ -57,7 +52,8 @@ class Material(db.Model):
 
     sale_items = db.relationship(
         "SaleItem",
-        backref=db.backref("material_ref", lazy=True),
+        # This fixes your Jinja error
+        backref=db.backref("material", lazy=True),
         cascade="all, delete-orphan"
     )
 
@@ -73,35 +69,28 @@ class Material(db.Model):
     def __repr__(self):
         return f"<Material {self.name}>"
 
+# ---------------- UsageLog ----------------
 
-
-# Usage Log
 
 class UsageLog(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    material_id = db.Column(
-        db.Integer,
-        db.ForeignKey("material.id"),
-        nullable=False
-    )
+    material_id = db.Column(db.Integer, db.ForeignKey(
+        "material.id"), nullable=False)
     used_quantity = db.Column(db.Float, nullable=False)
     date = db.Column(db.DateTime, default=datetime.utcnow)
 
     def __repr__(self):
-        # be robust if material removed
         name = getattr(self.material_ref, "name", "unknown")
         return f"<UsageLog Material={name}, Used={self.used_quantity}>"
 
+# ---------------- Sale and SaleItem ----------------
 
-
-# Sales Models
 
 class Sale(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     date = db.Column(db.DateTime, default=datetime.utcnow)
     total = db.Column(db.Float, default=0)
 
-    # deleting a sale deletes its items
     items = db.relationship(
         "SaleItem",
         backref=db.backref("sale_ref", lazy=True),
@@ -121,25 +110,19 @@ class SaleItem(db.Model):
     price = db.Column(db.Float, nullable=False, default=0)
 
     def __repr__(self):
-        name = getattr(self.material_ref, "name", "unknown")
+        # uses correct backref
+        name = getattr(self.material, "name", "unknown")
         return f"<SaleItem Material={name}, Qty={self.qty}, Price={self.price}>"
 
+# ---------------- ReorderRequest ----------------
 
- 
-# Reorder Request Model
- 
+
 class ReorderRequest(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    material_id = db.Column(
-        db.Integer,
-        db.ForeignKey("material.id"),
-        nullable=False
-    )
+    material_id = db.Column(db.Integer, db.ForeignKey(
+        "material.id"), nullable=False)
     supplier_id = db.Column(
-        db.Integer,
-        db.ForeignKey("supplier.id"),
-        nullable=True
-    )
+        db.Integer, db.ForeignKey("supplier.id"), nullable=True)
     requested_qty = db.Column(db.Float, nullable=False)
     request_date = db.Column(db.DateTime, default=datetime.utcnow)
     status = db.Column(db.String(50), default="Pending")
