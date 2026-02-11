@@ -1,71 +1,21 @@
 {% extends "base.html" %}
+
 {% block content %}
-<div class="container mt-4">
-    <div class="card shadow p-4 rounded-4">
-        <h3 class="mb-4">
-            {% if material %}
-            Edit Material
-            {% else %}
-            Add New Material
-            {% endif %}
-        </h3>
-
-        <!-- Disable autocomplete on the entire form -->
-        <form method="POST" autocomplete="off">
-            <div class="mb-3">
-                <label for="name" class="form-label">Material Name</label>
-                <input type="text" class="form-control" id="name" name="name"
-                    value="{{ material.name if material else '' }}" required autocomplete="off">
-            </div>
-
-            <div class="row">
-                <div class="col-md-6 mb-3">
-                    <label for="quantity" class="form-label">Quantity</label>
-                    <input type="number" step="0.01" class="form-control" id="quantity" name="quantity"
-                        value="{{ material.quantity if material else '' }}" required autocomplete="off">
-                </div>
-                <div class="col-md-6 mb-3">
-                    <label for="unit" class="form-label">Unit</label>
-                    <input type="text" class="form-control" id="unit" name="unit"
-                        value="{{ material.unit if material else '' }}" required autocomplete="off">
-                </div>
-            </div>
-
-            <div class="mb-3">
-                <label for="reorder_point" class="form-label">Reorder Point</label>
-                <input type="number" step="0.01" class="form-control" id="reorder_point" name="reorder_point"
-                    value="{{ material.reorder_point if material else '' }}" autocomplete="off">
-            </div>
-
-            <div class="mb-3">
-                <label for="supplier_id" class="form-label">Supplier</label>
-                <select class="form-select" id="supplier_id" name="supplier_id" autocomplete="off">
-                    <option value="">-- Select Supplier --</option>
-                    {% for s in suppliers %}
-                    <option value="{{ s.id }}" {% if material and material.supplier_id==s.id %}selected{% endif %}>
-                        {{ s.name }}
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="mb-3">
-                <label for="price" class="form-label">Price (₱)</label>
-                <input type="number" step="0.01" class="form-control" id="price" name="price"
-                    value="{{ material.price_per_unit if material else '' }}" required autocomplete="off">
-            </div>
-
-            <div class="d-flex justify-content-between">
-                <a href="{{ url_for('inventory') }}" class="btn btn-secondary px-4">Cancel</a>
-                <button type="submit" class="btn btn-primary px-4">
-                    {% if material %}
-                    Save Changes
-                    {% else %}
-                    Add Material
-                    {% endif %}
-                </button>
-            </div>
-        </form>
+<h3>Add Material</h3>
+<form method="POST" class="mt-3">
+    <div class="mb-3">
+        <label class="form-label">Name</label>
+        <input type="text" name="name" class="form-control" required>
     </div>
-</div>
+    <div class="mb-3">
+        <label class="form-label">Quantity</label>
+        <input type="number" name="quantity" class="form-control" required>
+    </div>
+    <div class="mb-3">
+        <label class="form-label">Unit</label>
+        <input type="text" name="unit" class="form-control">
+    </div>
+    <button type="submit" class="btn btn-primary">Add</button>
+    <a href="{{ url_for('inventory') }}" class="btn btn-secondary ms-2">Cancel</a>
+</form>
 {% endblock %}
