@@ -1,76 +1,115 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="card shadow-sm border-0 mt-3">
-    <div class="card-header bg-warning d-flex justify-content-between align-items-center">
-        <h5 class="mb-0 text-dark"><i class="bi bi-bell"></i> Notifications</h5>
+<div class="card shadow-sm border-0 mt-3" style="border-radius: 15px; overflow: hidden;">
+    <!-- HEADER with Gradient -->
+    <div class="card-header"
+        style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 20px 30px; display: flex; justify-content: space-between; align-items: center;">
+        <h5 class="mb-0" style="font-weight: 700; font-size: 24px; letter-spacing: 0.5px; color: white;">
+            <i class="bi bi-bell" style="margin-right: 10px;"></i> Notifications
+        </h5>
     </div>
 
-    <div class="card-body">
+    <!-- BODY -->
+    <div class="card-body"
+        style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.02) 0%, rgba(118, 75, 162, 0.02) 100%); padding: 30px;">
         {% if low %}
         <div class="list-group list-group-flush">
             {% for n in low %}
-            <div class="list-group-item d-flex justify-content-between align-items-center">
+            <div class="list-group-item"
+                style="background: white; border: 1px solid rgba(0, 0, 0, 0.05); border-radius: 10px; padding: 18px; margin-bottom: 12px; transition: all 0.3s ease; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);"
+                onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 16px rgba(0, 0, 0, 0.08)'"
+                onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(0, 0, 0, 0.04)'">
                 <div>
-                    <strong class="text-danger"><i class="bi bi-exclamation-triangle"></i> {{ n.name }}</strong> —
-                    {{ n.qty }} {{ n.unit if n.unit else '' }}
-                    {% if n.pred_days is not none %}
-                    <small class="text-muted">| Est. depletion in <strong>{{ n.pred_days|round(1) }}</strong>
-                        days</small>
-                    {% endif %}
+                    <div style="color: #ff6b6b; font-weight: 700; font-size: 16px; margin-bottom: 6px;">
+                        <i class="bi bi-exclamation-triangle" style="margin-right: 8px;"></i> {{ n.name }}
+                    </div>
+                    <div style="color: #2c3e50;">
+                        <strong>{{ n.qty }}</strong> {{ n.unit or '' }}
+                        {% if n.pred_days is not none %}
+                        <span style="color: #7f8c8d; margin-left: 12px;">
+                            <i class="bi bi-hourglass-split" style="margin-right: 4px;"></i> Est. depletion in
+                            <strong>{{ n.pred_days|round(1) }}</strong> days
+                        </span>
+                        {% endif %}
+                    </div>
                 </div>
 
-                <div class="d-flex align-items-center gap-2">
+                <div class="d-flex align-items-center gap-2" style="flex-wrap: wrap; justify-content: flex-end;">
                     {% set reorder = n.reorder_requests|first %}
 
                     {% if reorder %}
                     {% if reorder.status == 'Pending' %}
                     <form action="{{ url_for('update_reorder_status', id=reorder.id) }}" method="POST" class="d-inline">
                         <input type="hidden" name="status" value="Ordered">
-                        <button type="submit" class="btn btn-outline-primary btn-sm">
+                        <button type="submit" class="btn"
+                            style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; font-weight: 600; padding: 6px 12px; border-radius: 6px; font-size: 12px; transition: all 0.3s ease; box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);"
+                            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 16px rgba(102, 126, 234, 0.35)'"
+                            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(102, 126, 234, 0.2)'">
                             <i class="bi bi-hourglass-split"></i> Mark Ordered
                         </button>
                     </form>
-                    <span class="badge bg-warning text-dark px-3 py-2">
+                    <span class="badge"
+                        style="background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); color: white; padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;">
                         <i class="bi bi-clock-history"></i> Pending
                     </span>
 
                     {% elif reorder.status == 'Ordered' %}
                     <form action="{{ url_for('update_reorder_status', id=reorder.id) }}" method="POST" class="d-inline">
                         <input type="hidden" name="status" value="Received">
-                        <button type="submit" class="btn btn-outline-success btn-sm">
+                        <button type="submit" class="btn"
+                            style="background: linear-gradient(135deg, #42d5b3 0%, #2db89b 100%); color: white; border: none; font-weight: 600; padding: 6px 12px; border-radius: 6px; font-size: 12px; transition: all 0.3s ease; box-shadow: 0 2px 8px rgba(66, 213, 179, 0.2);"
+                            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 16px rgba(66, 213, 179, 0.35)'"
+                            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(66, 213, 179, 0.2)'">
                             <i class="bi bi-truck"></i> Mark Received
                         </button>
                     </form>
-                    <span class="badge bg-info text-dark px-3 py-2">
+                    <span class="badge"
+                        style="background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); color: white; padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;">
                         <i class="bi bi-truck"></i> Ordered
                     </span>
 
                     {% elif reorder.status == 'Received' %}
-                    <button class="btn btn-outline-secondary btn-sm" disabled>
+                    <button class="btn"
+                        style="background: #d3d3d3; color: #666; border: none; font-weight: 600; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: not-allowed;"
+                        disabled>
                         <i class="bi bi-check2-circle"></i> Completed
                     </button>
-                    <span class="badge bg-success px-3 py-2">
+                    <span class="badge"
+                        style="background: linear-gradient(135deg, #42d5b3 0%, #27a887 100%); color: white; padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;">
                         <i class="bi bi-check-circle"></i> Received
                     </span>
                     {% endif %}
                     {% else %}
-                    <a href="{{ url_for('order_material', material_id=n.id) }}"
-                        class="btn btn-outline-secondary btn-sm">
+                    <a href="{{ url_for('reorder', material_id=n.id) }}" class="btn"
+                        style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; font-weight: 600; padding: 6px 12px; border-radius: 6px; font-size: 12px; text-decoration: none; transition: all 0.3s ease; box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);"
+                        onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 16px rgba(102, 126, 234, 0.35)'"
+                        onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(102, 126, 234, 0.2)'">
                         <i class="bi bi-cart-plus"></i> Order
                     </a>
-                    <span class="badge bg-secondary px-3 py-2">
+                    <span class="badge"
+                        style="background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%); color: white; padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;">
                         <i class="bi bi-dash-circle"></i> No Order Yet
                     </span>
                     {% endif %}
+                    <a href="{{ url_for('dismiss_notification', material_id=n.id) }}" class="btn"
+                        onclick="return confirm('Are you sure you want to dismiss this notification?');"
+                        style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%); color: white; border: none; font-weight: 600; padding: 6px 12px; border-radius: 6px; font-size: 12px; transition: all 0.3s ease; box-shadow: 0 2px 8px rgba(255, 107, 107, 0.2); text-decoration: none; display: inline-flex; align-items: center;"
+                        onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 16px rgba(255, 107, 107, 0.35)'"
+                        onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(255, 107, 107, 0.2)'">
+                        <i class="bi bi-x-circle" style="margin-right: 4px;"></i> Dismiss
+                    </a>
                 </div>
             </div>
             {% endfor %}
         </div>
         {% else %}
-        <div class="text-center py-4">
-            <i class="bi bi-check-circle text-success fs-1"></i>
-            <h6 class="mt-3 text-success">All materials are sufficiently stocked!</h6>
-            <p class="text-muted">No low-stock notifications at this time.</p>
+        <!-- Success state -->
+        <div style="text-align: center; padding: 40px 20px;">
+            <i class="bi bi-check-circle"
+                style="font-size: 48px; color: #42d5b3; margin-bottom: 16px; display: block;"></i>
+            <h6 style="margin-top: 12px; color: #42d5b3; font-weight: 700; font-size: 18px;">All materials are
+                sufficiently stocked!</h6>
+            <p style="color: #7f8c8d; margin-top: 8px;">No low-stock notifications at this time.</p>
         </div>
         {% endif %}
     </div>

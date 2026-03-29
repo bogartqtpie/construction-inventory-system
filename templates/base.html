@@ -6,64 +6,141 @@
     <title>{{ title if title else 'Construction Inventory POS' }}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    <!-- ✅ Bootstrap 5.3 -->
+    <!-- Bootstrap CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
 
-    <!-- ✅ Bootstrap Icons -->
+    <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
 
-    <!-- ✅ Custom Styles -->
+    <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
 
     <style>
         body {
-            background-color: #f8f9fa;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e9ecf1 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            min-height: 100vh;
         }
 
         .navbar {
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+            position: sticky;
+            top: 0;
+            z-index: 1030;
+        }
+
+        .navbar-brand {
+            font-weight: 800;
+            font-size: 20px;
+            letter-spacing: 0.5px;
+            color: white !important;
         }
 
         .navbar-dark .nav-link {
-            transition: color 0.2s ease-in-out;
+            color: white !important;
+            font-weight: 500;
+            transition: all 0.3s ease;
         }
 
         .navbar-dark .nav-link:hover {
-            color: #ffc107;
+            color: #42d5b3 !important;
+            transform: translateY(-2px);
+        }
+
+        .navbar-dark .nav-link.active {
+            color: #42d5b3 !important;
         }
 
         .container {
             padding: 2rem 1rem;
         }
 
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            box-shadow: 0 8px 30px rgba(102, 126, 234, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px 12px 0 0;
+            font-weight: 700;
+            padding: 18px 20px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            font-weight: 600;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #42d5b3 0%, #2db89b 100%);
+            border: none;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%);
+            border: none;
+        }
+
         .badge {
             font-size: 0.75rem;
+            font-weight: 600;
+            padding: 6px 12px;
+            border-radius: 20px;
+        }
+
+        .modal-content {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px 12px 0 0;
         }
     </style>
 </head>
 
 <body>
-    <!-- ✅ Navigation Bar -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+
+    <!-- NAVBAR -->
+    <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container-fluid px-4">
-            <a class="navbar-brand fw-bold d-flex align-items-center gap-2" href="{{ url_for('index') }}">
+
+            <a class="navbar-brand d-flex align-items-center gap-2" href="{{ url_for('index') }}">
                 <i class="bi bi-hammer"></i> Inventory POS
             </a>
 
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navmenu"
-                aria-controls="navmenu" aria-expanded="false" aria-label="Toggle navigation">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navmenu">
                 <span class="navbar-toggler-icon"></span>
             </button>
 
             <div class="collapse navbar-collapse" id="navmenu">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+
+                <!-- LEFT MENU -->
+                <ul class="navbar-nav me-auto">
                     {% set nav_items = [
-                    ('inventory', 'Inventory', 'bi-box-seam'),
-                    ('sales', 'Sales', 'bi-cash-stack'),
-                    ('suppliers', 'Suppliers', 'bi-truck'),
-                    ('settings', 'Settings', 'bi-gear'),
-                    ('about', 'About', 'bi-info-circle')
+                    ('inventory','Inventory','bi-box-seam'),
+                    ('sales','Sales','bi-cash-stack'),
+                    ('suppliers_view','Suppliers','bi-truck'),
+                    ('settings','Settings','bi-gear'),
+                    ('about','About','bi-info-circle')
                     ] %}
+
                     {% for endpoint, label, icon in nav_items %}
                     <li class="nav-item">
                         <a class="nav-link {% if request.endpoint == endpoint %}active{% endif %}"
@@ -74,6 +151,7 @@
                     {% endfor %}
                 </ul>
 
+                <!-- RIGHT MENU -->
                 <ul class="navbar-nav">
                     <li class="nav-item position-relative">
                         <a class="nav-link" href="{{ url_for('notifications') }}">
@@ -87,18 +165,29 @@
                         </a>
                     </li>
                 </ul>
+
             </div>
         </div>
     </nav>
 
-    <!-- ✅ Main Content -->
+    <!-- PAGE CONTENT -->
     <main class="container">
         {% block content %}{% endblock %}
     </main>
 
-    <!-- ✅ Scripts -->
+    <!-- ✅ Bootstrap JS (REQUIRED for modal) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- ✅ DEBUG: catch JS errors -->
+    <script>
+        window.addEventListener("error", function (e) {
+            console.error("Global JS Error:", e.message);
+        });
+    </script>
+
+    <!-- ⚠️ Your custom JS -->
     <script src="{{ url_for('static', filename='js/pos.js') }}"></script>
+
 </body>
 
 </html>

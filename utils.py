@@ -1,20 +1,32 @@
+# utils.py
 from datetime import datetime
 from models import Material, UsageLog
 from sklearn.linear_model import LinearRegression
 import numpy as np
 
 
-def get_low_stock():
+def get_low_stock(exclude_ids=None):
     """
     Returns materials that are below or equal to their reorder point.
+    Adds temporary 'qty' attribute for template use.
+
+    exclude_ids: list of material IDs to filter out (e.g., dismissed notifications).
     """
-    return Material.query.filter(Material.quantity <= Material.reorder_point).all()
+    query = Material.query.filter(Material.quantity <= Material.reorder_point)
+    if exclude_ids:
+        query = query.filter(~Material.id.in_(exclude_ids))
+    low_materials = query.all()
+    for m in low_materials:
+        m.qty = m.quantity
+        if not hasattr(m, 'pred_days'):
+            m.pred_days = None
+    return low_materials
 
 
 def predict_depletion_days(material):
     """
     Predicts how many days before a material runs out using Linear Regression.
-    Uses UsageLog data (date vs. remaining quantity).
+    Uses UsageLog data (date vs cumulative used quantity).
     Returns:
         float: Estimated days until depletion
         None: If not enough data or stock not decreasing
@@ -23,42 +35,48 @@ def predict_depletion_days(material):
     try:
         # Get usage logs for this material (oldest first)
         usage_logs = UsageLog.query.filter_by(
-            material_id=material.id
-        ).order_by(UsageLog.date).all()
+            material_id=material.id).order_by(UsageLog.date).all()
 
         # Need at least 3 data points for meaningful regression
         if len(usage_logs) < 3:
             return None
+
+        # Build cumulative used quantity over time
+        cumulative_used = []
+        total_used = 0
+        for log in usage_logs:
+            total_used += log.used_quantity
+            cumulative_used.append(total_used)
 
         dates = np.array([
             (log.date - usage_logs[0].date).days
             for log in usage_logs
         ]).reshape(-1, 1)
 
-        # Quantities from logs
-        quantities = np.array([log.remaining_quantity for log in usage_logs])
+        quantities = np.array([
+            material.quantity - used for used in cumulative_used
+        ])
 
-        # If all quantities are the same (no usage trend)
+        # If stock not decreasing
         if np.all(quantities == quantities[0]):
             return None
 
-        # Fit linear regression (time vs. quantity)
+        # Linear regression
         model = LinearRegression()
         model.fit(dates, quantities)
 
         m = model.coef_[0]       # slope
         b = model.intercept_     # y-intercept
 
-        # If slope is positive → stock increasing, no depletion
+        # If slope >= 0 → stock increasing, no depletion
         if m >= 0:
             return None
 
-        # Predict day stock reaches zero: 0 = m*x + b  →  x = -b / m
+        # Predict day stock reaches zero: 0 = m*x + b → x = -b/m
         days_until_empty = -b / m
         current_day = dates[-1][0]
         days_remaining = days_until_empty - current_day
 
-        # If prediction is negative, stock already below trend line
         if days_remaining <= 0:
             return 0
 

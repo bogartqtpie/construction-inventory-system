@@ -1,7 +1,7 @@
+# models.py
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 
-# 1️⃣ Initialize SQLAlchemy
 db = SQLAlchemy()
 
 # ---------------- Supplier Model ----------------
@@ -34,40 +34,83 @@ class Supplier(db.Model):
 class Material(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(200), nullable=False, unique=True)
+    category = db.Column(db.String(100))
     unit = db.Column(db.String(50), default="pcs")
-    quantity = db.Column(db.Float, default=0)
+    quantity = db.Column(db.Float, default=0)  # used if no variants
     reorder_point = db.Column(db.Float, default=0)
     price_per_unit = db.Column(db.Float, default=0.0)
     price = db.Column(db.Float, default=0)
     subtotal = db.Column(db.Float)
-
     supplier_id = db.Column(
-        db.Integer, db.ForeignKey("supplier.id"), nullable=True)
+        db.Integer, db.ForeignKey("supplier.id"), nullable=True
+    )
 
+    # Relationships
     usage_logs = db.relationship(
         "UsageLog",
         backref=db.backref("material_ref", lazy=True),
         cascade="all, delete-orphan"
     )
-
     sale_items = db.relationship(
         "SaleItem",
-        # This fixes your Jinja error
         backref=db.backref("material", lazy=True),
         cascade="all, delete-orphan"
     )
-
     reorder_requests = db.relationship(
         "ReorderRequest",
         backref=db.backref("material_ref", lazy=True),
         cascade="all, delete-orphan"
     )
+    variants = db.relationship(
+        "MaterialVariant",
+        backref=db.backref("material_ref", lazy=True),
+        cascade="all, delete-orphan"
+    )
+
+    # ---------------- STOCK CALCULATION ----------------
+
+    def total_quantity(self):
+        if self.variants:
+            return sum(v.quantity for v in self.variants)
+        return self.quantity
 
     def status(self):
-        return "LOW" if self.quantity <= self.reorder_point else "OK"
+        qty = self.total_quantity()
+        if qty == 0:
+            return "OUT"
+        if qty <= self.reorder_point:
+            return "LOW"
+        return "OK"
+
+    # ---------------- Reorder Quantity with Forecast ----------------
+    def recommended_reorder_qty(self, forecast_rain_factor=1.0):
+        """
+        Calculates suggested reorder quantity considering rain forecast.
+        forecast_rain_factor: 0.5 for heavy rain, 1 for normal.
+        """
+        base_qty = max(self.reorder_point - self.total_quantity(), 0)
+        return round(base_qty * forecast_rain_factor, 2)
 
     def __repr__(self):
         return f"<Material {self.name}>"
+
+# ---------------- MaterialVariant ----------------
+
+
+class MaterialVariant(db.Model):
+    __tablename__ = "material_variant"
+    __table_args__ = {"extend_existing": True}
+
+    id = db.Column(db.Integer, primary_key=True)
+    material_id = db.Column(db.Integer, db.ForeignKey(
+        "material.id"), nullable=False)
+    name = db.Column(db.String(100), nullable=False)
+    quantity = db.Column(db.Float, default=0)
+    unit = db.Column(db.String(50), default="pcs")
+    price = db.Column(db.Float, default=0.0)
+
+    def __repr__(self):
+        return f"<MaterialVariant {self.name} of Material ID={self.material_id}>"
 
 # ---------------- UsageLog ----------------
 
@@ -83,13 +126,14 @@ class UsageLog(db.Model):
         name = getattr(self.material_ref, "name", "unknown")
         return f"<UsageLog Material={name}, Used={self.used_quantity}>"
 
-# ---------------- Sale and SaleItem ----------------
+# ---------------- Sale ----------------
 
 
 class Sale(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     date = db.Column(db.DateTime, default=datetime.utcnow)
     total = db.Column(db.Float, default=0)
+    type = db.Column(db.String(20), default="sale")  # Added column
 
     items = db.relationship(
         "SaleItem",
@@ -98,7 +142,9 @@ class Sale(db.Model):
     )
 
     def __repr__(self):
-        return f"<Sale ID={self.id}, Total={self.total}>"
+        return f"<Sale ID={self.id}, Total={self.total}, Type={self.type}>"
+
+# ---------------- SaleItem ----------------
 
 
 class SaleItem(db.Model):
@@ -110,7 +156,6 @@ class SaleItem(db.Model):
     price = db.Column(db.Float, nullable=False, default=0)
 
     def __repr__(self):
-        # uses correct backref
         name = getattr(self.material, "name", "unknown")
         return f"<SaleItem Material={name}, Qty={self.qty}, Price={self.price}>"
 
