@@ -1,7 +1,6 @@
-# utils.py
+﻿# utils.py
 from datetime import datetime
 from models import Material, UsageLog
-from sklearn.linear_model import LinearRegression
 import numpy as np
 
 
@@ -62,11 +61,24 @@ def predict_depletion_days(material):
             return None
 
         # Linear regression
-        model = LinearRegression()
-        model.fit(dates, quantities)
+        # Convert to 1D lists
+        x_values = [d[0] for d in dates]
+        y_values = list(quantities)
 
-        m = model.coef_[0]       # slope
-        b = model.intercept_     # y-intercept
+        n = len(x_values)
+        x_mean = sum(x_values) / n
+        y_mean = sum(y_values) / n
+
+        numerator = sum((x - x_mean) * (y - y_mean)
+                        for x, y in zip(x_values, y_values))
+        denominator = sum((x - x_mean) ** 2 for x in x_values)
+
+        # Avoid division by zero
+        if denominator == 0:
+            return None
+
+        m = numerator / denominator
+        b = y_mean - (m * x_mean)
 
         # If slope >= 0 → stock increasing, no depletion
         if m >= 0:

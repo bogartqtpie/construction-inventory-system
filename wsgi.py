@@ -1,9 +1,0 @@
-# wsgi.py
-from app import create_app
-
-# Create the Flask app
-app = create_app()
-
-# Only run locally for debugging
-if __name__ == "__main__":
-    app.run(debug=True)

@@ -19,7 +19,7 @@ class Supplier(db.Model):
         cascade="all, delete-orphan"
     )
 
-    reorder_requests = db.relationship(
+    supplier_reorder_requests = db.relationship(
         "ReorderRequest",
         backref=db.backref("supplier_ref", lazy=True),
         cascade="all, delete-orphan"
@@ -36,16 +36,14 @@ class Material(db.Model):
     name = db.Column(db.String(200), nullable=False, unique=True)
     category = db.Column(db.String(100))
     unit = db.Column(db.String(50), default="pcs")
-    quantity = db.Column(db.Float, default=0)  # used if no variants
+    quantity = db.Column(db.Float, default=0)
     reorder_point = db.Column(db.Float, default=0)
     price_per_unit = db.Column(db.Float, default=0.0)
     price = db.Column(db.Float, default=0)
     subtotal = db.Column(db.Float)
     supplier_id = db.Column(
-        db.Integer, db.ForeignKey("supplier.id"), nullable=True
-    )
+        db.Integer, db.ForeignKey("supplier.id"), nullable=True)
 
-    # Relationships
     usage_logs = db.relationship(
         "UsageLog",
         backref=db.backref("material_ref", lazy=True),
@@ -67,8 +65,6 @@ class Material(db.Model):
         cascade="all, delete-orphan"
     )
 
-    # ---------------- STOCK CALCULATION ----------------
-
     def total_quantity(self):
         if self.variants:
             return sum(v.quantity for v in self.variants)
@@ -82,17 +78,36 @@ class Material(db.Model):
             return "LOW"
         return "OK"
 
-    # ---------------- Reorder Quantity with Forecast ----------------
     def recommended_reorder_qty(self, forecast_rain_factor=1.0):
-        """
-        Calculates suggested reorder quantity considering rain forecast.
-        forecast_rain_factor: 0.5 for heavy rain, 1 for normal.
-        """
         base_qty = max(self.reorder_point - self.total_quantity(), 0)
         return round(base_qty * forecast_rain_factor, 2)
 
     def __repr__(self):
         return f"<Material {self.name}>"
+
+# ---------------- ReorderRequest ----------------
+
+
+class ReorderRequest(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    material_id = db.Column(db.Integer, db.ForeignKey(
+        "material.id"), nullable=False)
+    supplier_id = db.Column(
+        db.Integer, db.ForeignKey("supplier.id"), nullable=True)
+    requested_qty = db.Column(db.Float, nullable=False)
+    request_date = db.Column(db.DateTime, default=datetime.utcnow)
+    status = db.Column(db.String(50), default="Pending")
+    dismissed = db.Column(db.Boolean, default=False)  # ✅ For dismiss button
+
+    def mark_received(self):
+        if self.material_ref:
+            self.material_ref.quantity += self.requested_qty
+        self.status = "Received"
+        db.session.commit()
+
+    def __repr__(self):
+        name = getattr(self.material_ref, "name", "unknown")
+        return f"<ReorderRequest Material={name}, Status={self.status}, Dismissed={self.dismissed}>"
 
 # ---------------- MaterialVariant ----------------
 
@@ -133,7 +148,7 @@ class Sale(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     date = db.Column(db.DateTime, default=datetime.utcnow)
     total = db.Column(db.Float, default=0)
-    type = db.Column(db.String(20), default="sale")  # Added column
+    type = db.Column(db.String(20), default="sale")
 
     items = db.relationship(
         "SaleItem",
@@ -158,24 +173,3 @@ class SaleItem(db.Model):
     def __repr__(self):
         name = getattr(self.material, "name", "unknown")
         return f"<SaleItem Material={name}, Qty={self.qty}, Price={self.price}>"
-
-# ---------------- ReorderRequest ----------------
-
-
-class ReorderRequest(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    material_id = db.Column(db.Integer, db.ForeignKey(
-        "material.id"), nullable=False)
-    supplier_id = db.Column(
-        db.Integer, db.ForeignKey("supplier.id"), nullable=True)
-    requested_qty = db.Column(db.Float, nullable=False)
-    request_date = db.Column(db.DateTime, default=datetime.utcnow)
-    status = db.Column(db.String(50), default="Pending")
-
-    def mark_received(self):
-        self.status = "Received"
-        db.session.commit()
-
-    def __repr__(self):
-        name = getattr(self.material_ref, "name", "unknown")
-        return f"<ReorderRequest Material={name}, Status={self.status}>"

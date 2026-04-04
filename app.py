@@ -1,374 +1,896 @@
-from flask import Flask, render_template, request, redirect, url_for, jsonify, Response, flash, session
-from models import db, Material, MaterialVariant, Supplier, UsageLog, Sale, SaleItem, ReorderRequest
-from utils import get_low_stock, predict_depletion_days
-from flask_migrate import Migrate
-from datetime import datetime
-import smtplib
-from email.mime.text import MIMEText
+import csv
+from flask import Response
+from io import StringIO
 import os
+import requests
+from datetime import datetime
+from flask_migrate import Migrate
+from flask import Flask, flash, jsonify, redirect, render_template, request, url_for
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import inspect, text
+from sqlalchemy.orm import joinedload
+
+from inventory_seeder import seed_inventory_from_text_with_app_context
+
+basedir = os.path.abspath(os.path.dirname(__file__))
+instance_path = os.path.join(basedir, "instance")
+os.makedirs(instance_path, exist_ok=True)
+
+app = Flask(
+    __name__,
+    static_folder="templates/static",
+    static_url_path="/static",
+)
+app.secret_key = os.environ.get("SECRET_KEY", "fallback_secret")
+
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(
+    instance_path, "YOUR_DB_NAME.db"
+)
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+db = SQLAlchemy(app)
+migrate = Migrate(app, db)
+
+# Same categories as inventory / add-edit templates
+CATEGORIES = [
+    "Bits & Disc",
+    "Hand Tools",
+    "Concreting & Masonry",
+    "Nail, Tox, & Screws",
+    "Wood Products",
+    "Rebars & G.I Wires",
+    "Drywall & Ceiling",
+]
 
 
-def to_float(value):
+# ------------------------------
+# MODELS
+# ------------------------------
+
+
+class Supplier(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(150), nullable=False)
+    contact = db.Column(db.String(50), nullable=True)
+    address = db.Column(db.String(200), nullable=True)
+
+
+class Material(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(150), nullable=False)
+    category = db.Column(db.String(120), default="")
+    quantity = db.Column(db.Float, default=0.0)
+    unit = db.Column(db.String(50), default="pcs")
+    price_per_unit = db.Column(db.Float, default=0.0)
+    reorder_point = db.Column(db.Float, default=0.0)
+    supplier_id = db.Column(
+        db.Integer, db.ForeignKey("supplier.id"), nullable=True)
+    dismiss_notification = db.Column(db.Boolean, default=False)
+
+    supplier = db.relationship("Supplier", backref="materials")
+    variants = db.relationship(
+        "MaterialVariant",
+        backref="material",
+        cascade="all, delete-orphan",
+        order_by="MaterialVariant.id",
+    )
+    reorder_requests = db.relationship(
+        "ReorderRequest",
+        backref="material",
+        cascade="all, delete-orphan",
+    )
+
+
+@app.route("/reorder/<int:reorder_id>/receive", methods=["POST"])
+def receive_reorder(reorder_id):
+    reorder = ReorderRequest.query.get_or_404(reorder_id)
+    reorder.mark_received()
+    flash(f"Reorder for '{reorder.material_ref.name}' received!", "success")
+    return redirect(url_for("notifications"))
+
+
+class MaterialVariant(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    material_id = db.Column(db.Integer, db.ForeignKey(
+        "material.id"), nullable=False)
+    name = db.Column(db.String(150), nullable=False)
+    quantity = db.Column(db.Float, default=0.0)
+    unit = db.Column(db.String(50), default="pcs")
+    price = db.Column(db.Float, default=0.0)
+
+
+class Sale(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    date = db.Column(db.DateTime, default=datetime.utcnow)
+    total = db.Column(db.Float, default=0.0)
+
+    items = db.relationship(
+        "SaleItem",
+        backref="sale",
+        cascade="all, delete-orphan",
+        order_by="SaleItem.id",
+    )
+
+
+class SaleItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    sale_id = db.Column(db.Integer, db.ForeignKey("sale.id"), nullable=False)
+    material_id = db.Column(db.Integer, db.ForeignKey(
+        "material.id"), nullable=False)
+    variant_id = db.Column(db.Integer, db.ForeignKey(
+        "material_variant.id"), nullable=True)
+    qty = db.Column(db.Float, nullable=False)
+    price = db.Column(db.Float, nullable=False)
+
+    material = db.relationship("Material", backref="sale_items")
+    variant = db.relationship("MaterialVariant", backref="sale_items")
+
+    @property
+    def display_name(self):
+        if self.variant_id and self.variant:
+            return f"{self.material.name} — {self.variant.name}"
+        return self.material.name
+
+
+class ReorderRequest(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    material_id = db.Column(db.Integer, db.ForeignKey(
+        "material.id"), nullable=False)
+    supplier_id = db.Column(
+        db.Integer, db.ForeignKey("supplier.id"), nullable=True)
+    quantity = db.Column(db.Float, default=0.0)
+    notes = db.Column(db.Text, nullable=True)
+    status = db.Column(db.String(20), default="Pending")
+    dismissed = db.Column(db.Boolean, default=False)  # ✅ ADD THIS
+
+
+# ------------------------------
+# HELPERS
+# ------------------------------
+
+
+def _parse_float(val, default=0.0):
+    if val is None or val == "":
+        return default
     try:
-        return float(value)
+        return float(val)
     except (TypeError, ValueError):
-        return 0.0
-
-# ---------------- EMAIL FUNCTION ----------------
+        return default
 
 
-def send_order_email(material, supplier, qty):
+def _parse_int_optional(val):
+    if val is None or val == "":
+        return None
     try:
-        if not supplier or not supplier.contact:
-            return
+        return int(val)
+    except (TypeError, ValueError):
+        return None
 
-        message = f"""
-Order Request
 
-Material: {material.name}
-Quantity: {qty} {material.unit}
+def material_is_low_stock(m):
+    if m.variants:
+        return any(v.quantity <= m.reorder_point for v in m.variants)
+    return m.quantity <= m.reorder_point
 
-Supplier: {supplier.name}
 
-Please confirm availability.
+def count_low_notifications():
+    count = 0
+    materials = Material.query.all()
 
-Generated by Construction Inventory System.
-"""
-        msg = MIMEText(message)
-        msg["Subject"] = "Material Order Request"
-        msg["From"] = "your_email@gmail.com"
-        msg["To"] = supplier.contact
+    for m in materials:
+        # Skip if NOT low stock or already dismissed.
+        if not material_is_low_stock(m) or m.dismiss_notification:
+            continue
 
-        server = smtplib.SMTP("smtp.gmail.com", 587)
-        server.starttls()
-        server.login("your_email@gmail.com", "your_app_password")
-        server.send_message(msg)
-        server.quit()
+        count += 1
+
+    return count
+
+
+def count_pending_notifications():
+    count = 0
+    pending_requests = (
+        ReorderRequest.query
+        .filter_by(status="Pending", dismissed=False)
+        .options(joinedload(ReorderRequest.material))
+        .all()
+    )
+
+    for req in pending_requests:
+        m = req.material
+        if not m:
+            continue
+        # Keep navbar count aligned with rows shown on /notifications.
+        if m.dismiss_notification:
+            continue
+        if not material_is_low_stock(m):
+            continue
+        count += 1
+
+    return count
+
+
+@app.context_processor
+def inject_notification_counts():
+    # Red bubble: low stock
+    low_stock_count = count_low_notifications()
+
+    # Yellow bubble: pending reorder requests
+    pending_order_count = count_pending_notifications()
+
+    return dict(
+        low_stock_count=low_stock_count,
+        pending_order_count=pending_order_count
+    )
+
+
+def build_low_stock_rows():
+    rows = []
+
+    for m in Material.query.order_by(Material.name).all():
+
+        # Skip if NOT low stock or already dismissed.
+        if not material_is_low_stock(m) or m.dismiss_notification:
+            continue
+
+        total = (
+            sum(v.quantity for v in m.variants)
+            if m.variants else m.quantity
+        )
+
+        row = type("LowRow", (), {})()
+        row.id = m.id
+        row.name = m.name
+        row.qty = total
+        row.unit = m.unit
+        row.pred_days = None
+        row.reorder_requests = ReorderRequest.query.filter_by(
+            material_id=m.id,
+            dismissed=False
+        ).all()
+
+        rows.append(row)
+
+    return rows
+
+
+def inventory_json_payload():
+    out = []
+    for m in Material.query.options(joinedload(Material.variants)).all():
+        out.append(
+            {
+                "id": m.id,
+                "name": m.name,
+                "quantity": m.quantity,
+                "unit": m.unit,
+                "reorder_point": m.reorder_point,
+                "variants": (
+                    [{"id": v.id, "quantity": v.quantity} for v in m.variants]
+                    if m.variants
+                    else None
+                ),
+            }
+        )
+    return out
+
+
+def _save_material_from_form(material, is_new):
+    material.name = request.form["name"].strip()
+    material.category = request.form.get("category", "").strip()
+    material.unit = request.form.get("unit", "pcs").strip() or "pcs"
+    material.price_per_unit = _parse_float(
+        request.form.get("price_per_unit"), 0.0)
+    material.reorder_point = _parse_float(
+        request.form.get("reorder_point"), 0.0)
+    material.supplier_id = _parse_int_optional(request.form.get("supplier_id"))
+
+    names = request.form.getlist("variant_name[]")
+    qtys = request.form.getlist("variant_quantity[]")
+    units = request.form.getlist("variant_unit[]")
+    prices = request.form.getlist("variant_price[]")
+
+    variant_rows = []
+    for i, name in enumerate(names):
+        name = (name or "").strip()
+        if not name:
+            continue
+        q = _parse_float(qtys[i] if i < len(qtys) else 0, 0.0)
+        u = (units[i] if i < len(units) else "pcs") or "pcs"
+        p = _parse_float(prices[i] if i < len(prices) else 0, 0.0)
+        variant_rows.append((name, q, u, p))
+
+    if variant_rows:
+        material.quantity = 0.0
+        if not is_new:
+            MaterialVariant.query.filter_by(material_id=material.id).delete()
+        for name, q, u, p in variant_rows:
+            db.session.add(
+                MaterialVariant(
+                    material_id=material.id,
+                    name=name,
+                    quantity=q,
+                    unit=u,
+                    price=p,
+                )
+            )
+    else:
+        if not is_new:
+            MaterialVariant.query.filter_by(material_id=material.id).delete()
+        material.quantity = _parse_float(request.form.get("quantity"), 0.0)
+
+
+# ------------------------------
+# WEATHER FEATURE (FIXED)
+# ------------------------------
+
+def get_weather():
+    try:
+        API_KEY = os.environ.get("OPENWEATHER_API_KEY")
+
+        url = f"https://api.openweathermap.org/data/2.5/forecast?q=Quezon City,PH&appid={API_KEY}&units=metric"
+        response = requests.get(url)
+
+        print("STATUS:", response.status_code)
+
+        data = response.json()
+
+        if str(data.get("cod")) != "200":
+            print("API ERROR:", data)
+            return None
+
+        return data
 
     except Exception as e:
-        print("Email failed:", e)
+        print("WEATHER ERROR:", e)
+        return None
 
-# ---------------- CREATE APP ----------------
+
+def _linear_regression_predict(x_values, y_values, predict_x):
+    """Fit y = mx + b via least squares and predict y at predict_x."""
+    n = len(x_values)
+    if n == 0:
+        return 0.0
+
+    x_mean = sum(x_values) / n
+    y_mean = sum(y_values) / n
+
+    numerator = 0.0
+    denominator = 0.0
+    for x, y in zip(x_values, y_values):
+        dx = x - x_mean
+        numerator += dx * (y - y_mean)
+        denominator += dx * dx
+
+    if denominator == 0:
+        return y_mean
+
+    slope = numerator / denominator
+    intercept = y_mean - (slope * x_mean)
+    return (slope * predict_x) + intercept
 
 
-def create_app():
-    app = Flask(__name__, instance_relative_config=True)
+def analyze_weather(data):
+    weather_list = data.get("list", [])
+    total_count = len(weather_list)
+    if total_count == 0:
+        return ["No forecast data available for analysis."]
 
-    # Ensure instance folder exists
-    os.makedirs(app.instance_path, exist_ok=True)
+    # x = time index (3-hour forecast slots), y = rain signal (0 or 1)
+    x_values = []
+    y_values = []
+    for idx, item in enumerate(weather_list):
+        weather_main = (item.get("weather") or [{}])[0].get("main", "").lower()
+        rain_like = 1.0 if any(k in weather_main for k in (
+            "rain", "drizzle", "thunderstorm")) else 0.0
+        x_values.append(float(idx))
+        y_values.append(rain_like)
 
-    # Database config
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + \
-        os.path.join(app.instance_path, 'inventory.db')
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['SECRET_KEY'] = 'inventory-secret'
+    # Predict rain risk for the next 24 hours (8 x 3-hour slots)
+    future_points = min(8, total_count)
+    predicted = []
+    for step in range(future_points):
+        px = float(total_count + step)
+        py = _linear_regression_predict(x_values, y_values, px)
+        predicted.append(max(0.0, min(1.0, py)))
 
-    db.init_app(app)
-    Migrate(app, db)
+    y = (sum(predicted) / len(predicted)) if predicted else 0.0
 
-    # ---------------- ROUTES ----------------
-    @app.route('/')
-    def index():
-        materials = Material.query.order_by(Material.name).all()
-        return render_template('index.html', materials=materials, low_count=len(get_low_stock()))
+    suggestions = []
 
-    @app.route('/inventory')
-    def inventory():
-        materials = Material.query.order_by(Material.name).all()
-        return render_template('inventory.html', materials=materials, low_count=len(get_low_stock()))
+    if y > 0.6:
+        suggestions.append(
+            "Linear regression forecast: high rain risk in the next 24 hours.")
+        suggestions.append("Reduce outdoor material orders by around 30-50%.")
+        suggestions.append(
+            "Prioritize covered storage for cement, sand, CHB, and wood products.")
 
-    @app.route('/materials/add', methods=['GET', 'POST'])
-    def add_material():
-        suppliers = Supplier.query.order_by(Supplier.name).all()
-        categories = [
-            "Bits & Disc", "Hand Tools", "Concreting & Masonry",
-            "Nail, Tox, & Screws", "Wood Products",
-            "Rebars & G.I Wires", "Drywall & Ceiling"
-        ]
+    elif y > 0.3:
+        suggestions.append(
+            "Linear regression forecast: moderate rain risk in the next 24 hours.")
+        suggestions.append(
+            "Reduce outdoor material orders moderately (around 15-25%).")
 
-        if request.method == 'POST':
-            price_value = request.form.get(
-                'price') or request.form.get('price_per_unit') or 0
-            new_material = Material(
-                name=request.form['name'],
-                category=request.form.get('category'),
-                quantity=to_float(request.form.get('quantity')),
-                unit=request.form.get('unit', 'pcs'),
-                reorder_point=to_float(request.form.get('reorder_point')),
-                supplier_id=request.form.get('supplier_id') or None,
-                price_per_unit=float(price_value)
-            )
-            db.session.add(new_material)
-            db.session.commit()
+    else:
+        suggestions.append(
+            "Linear regression forecast: low rain risk in the next 24 hours.")
+        suggestions.append("Maintain standard inventory levels.")
 
-            variant_names = request.form.getlist('variant_name[]')
-            variant_quantities = request.form.getlist('variant_quantity[]')
-            variant_units = request.form.getlist('variant_unit[]')
-            variant_prices = request.form.getlist('variant_price[]')
+    suggestions.append(f"Predicted rain risk score: {y:.2f}")
 
-            for i, name in enumerate(variant_names):
-                if name.strip() == '':
-                    continue
-                variant = MaterialVariant(
-                    material_id=new_material.id,
-                    name=name.strip(),
-                    quantity=to_float(variant_quantities[i]),
-                    unit=variant_units[i] or 'pcs',
-                    price=to_float(variant_prices[i])
-                )
-                db.session.add(variant)
-            db.session.commit()
+    return suggestions
 
-            return redirect(url_for('inventory'))
 
-        return render_template('add_edit_material.html', suppliers=suppliers, categories=categories, material=None, low_count=len(get_low_stock()))
+def build_weather_days(data, max_days=5):
+    by_day = {}
 
-    @app.route('/materials/<int:id>/edit', methods=['GET', 'POST'])
-    def edit_material(id):
-        material = Material.query.get_or_404(id)
-        suppliers = Supplier.query.order_by(Supplier.name).all()
-        categories = [
-            "Bits & Disc", "Hand Tools", "Concreting & Masonry",
-            "Nail, Tox, & Screws", "Wood Products",
-            "Rebars & G.I Wires", "Drywall & Ceiling"
-        ]
+    for item in data.get("list", []):
+        ts = item.get("dt")
+        if not ts:
+            continue
 
-        if request.method == 'POST':
-            material.name = request.form['name']
-            material.category = request.form.get('category')
-            material.quantity = to_float(request.form.get('quantity'))
-            material.unit = request.form.get('unit', material.unit)
-            material.reorder_point = float(
-                request.form.get('reorder_point', 0))
-            material.supplier_id = request.form.get('supplier_id') or None
+        dt_obj = datetime.fromtimestamp(ts)
+        day_key = dt_obj.strftime("%Y-%m-%d")
+        condition = (
+            (item.get("weather") or [{}])[0].get("main", "Unknown")
+            if isinstance(item.get("weather"), list)
+            else "Unknown"
+        )
+        temp = item.get("main", {}).get("temp")
 
-            price_value = request.form.get(
-                'price') or request.form.get('price_per_unit')
-            material.price_per_unit = float(
-                price_value) if price_value else 0.0
+        if day_key not in by_day:
+            by_day[day_key] = {
+                "date_obj": dt_obj,
+                "temps": [],
+                "conditions": {},
+            }
 
-            db.session.commit()
+        if temp is not None:
+            by_day[day_key]["temps"].append(float(temp))
 
-            for v in material.variants:
-                db.session.delete(v)
-            db.session.commit()
+        by_day[day_key]["conditions"][condition] = (
+            by_day[day_key]["conditions"].get(condition, 0) + 1
+        )
 
-            variant_names = request.form.getlist('variant_name[]')
-            variant_quantities = request.form.getlist('variant_quantity[]')
-            variant_units = request.form.getlist('variant_unit[]')
-            variant_prices = request.form.getlist('variant_price[]')
+    days = []
+    for day in sorted(by_day.keys())[:max_days]:
+        day_data = by_day[day]
+        temps = day_data["temps"]
+        conditions = day_data["conditions"]
 
-            for i, name in enumerate(variant_names):
-                if name.strip() == '':
-                    continue
-                variant = MaterialVariant(
-                    material_id=material.id,
-                    name=name.strip(),
-                    quantity=to_float(variant_quantities[i]),
-                    unit=variant_units[i] or 'pcs',
-                    price=to_float(variant_prices[i])
-                )
-                db.session.add(variant)
-            db.session.commit()
+        top_condition = "Unknown"
+        if conditions:
+            top_condition = max(conditions.items(), key=lambda x: x[1])[0]
 
-            return redirect(url_for('inventory'))
+        days.append(
+            {
+                "day_name": day_data["date_obj"].strftime("%a"),
+                "date_label": day_data["date_obj"].strftime("%b %d"),
+                "min_temp": round(min(temps), 1) if temps else None,
+                "max_temp": round(max(temps), 1) if temps else None,
+                "condition": top_condition,
+            }
+        )
 
-        return render_template('add_edit_material.html', material=material, suppliers=suppliers, categories=categories, low_count=len(get_low_stock()))
+    return days
+# ------------------------------
+# ROUTES
+# ------------------------------
 
-    @app.route('/materials/<int:id>/delete', methods=['POST'])
-    def delete_material(id):
-        material = Material.query.get_or_404(id)
-        db.session.delete(material)
+
+@app.route("/")
+def index():
+    materials = Material.query.options(joinedload(Material.variants)).all()
+
+    weather_data = get_weather()
+
+    if not weather_data:
+        warning = "Weather data not available. Check API key or internet connection."
+        advice = []
+        weather_days = []
+    else:
+        warning = None
+        advice = analyze_weather(weather_data)
+        weather_days = build_weather_days(weather_data)
+
+    return render_template(
+        "index.html",
+        materials=materials,
+        weather=weather_data,
+        warning=warning,
+        advice=advice,
+        weather_days=weather_days,
+    )
+
+
+@app.route("/admin/seed_inventory", methods=["GET", "POST"])
+def seed_inventory():
+    results = None
+    if request.method == "POST":
+        seed_text = request.form.get("seed_text", "")
+        results = seed_inventory_from_text_with_app_context(seed_text)
+        flash("Inventory seed/import completed.", "success")
+    return render_template("seed_inventory.html", results=results)
+
+
+@app.route("/checkout", methods=["POST"])
+def checkout():
+    data = request.get_json(silent=True) or {}
+    cart = data.get("cart") or []
+    if not cart:
+        return jsonify(success=False, message="Cart is empty"), 400
+
+    total = sum(_parse_float(item.get("subtotal"), 0.0) for item in cart)
+
+    for item in cart:
+        mid = int(item["id"])
+        qty = float(item.get("qty", 0))
+        if qty <= 0:
+            return jsonify(success=False, message="Invalid quantity"), 400
+        vid = item.get("variantId")
+        if vid is not None and vid != "":
+            vid = int(vid)
+        else:
+            vid = None
+
+        m = Material.query.options(joinedload(Material.variants)).get(mid)
+        if not m:
+            return jsonify(success=False, message=f"Material {mid} not found"), 400
+
+        if vid:
+            v = MaterialVariant.query.filter_by(
+                id=vid, material_id=m.id).first()
+            if not v:
+                return jsonify(success=False, message="Invalid variant"), 400
+            if v.quantity < qty:
+                return jsonify(
+                    success=False,
+                    message=f"Not enough stock for {m.name} ({v.name})",
+                ), 400
+        else:
+            if m.variants:
+                return jsonify(
+                    success=False,
+                    message=f"Select a variant for {m.name}",
+                ), 400
+            if m.quantity < qty:
+                return jsonify(success=False, message=f"Not enough stock for {m.name}"), 400
+
+    sale = Sale(total=total)
+    db.session.add(sale)
+    db.session.flush()
+
+    for item in cart:
+        mid = int(item["id"])
+        qty = float(item.get("qty", 0))
+        price = float(item.get("price", 0))
+        vid = item.get("variantId")
+        if vid is not None and vid != "":
+            vid = int(vid)
+        else:
+            vid = None
+
+        m = Material.query.get(mid)
+        si = SaleItem(
+            sale_id=sale.id,
+            material_id=mid,
+            variant_id=vid,
+            qty=qty,
+            price=price,
+        )
+        db.session.add(si)
+
+        if vid:
+            v = MaterialVariant.query.get(vid)
+            v.quantity -= qty
+        else:
+            m.quantity -= qty
+
+    db.session.commit()
+
+    return jsonify(success=True, updated_inventory=inventory_json_payload())
+
+
+@app.route("/inventory")
+def inventory():
+    materials = Material.query.options(joinedload(Material.variants)).all()
+    return render_template("inventory.html", materials=materials)
+
+
+@app.route("/material/add", methods=["GET", "POST"])
+def add_material():
+    suppliers = Supplier.query.order_by(Supplier.name).all()
+
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+
+        if not name:
+            flash("Material name is required!", "danger")
+            return redirect(url_for("add_material"))
+
+        m = Material(name=name)   # ✅ FIX: set name BEFORE saving
+        db.session.add(m)
+        db.session.flush()
+
+        _save_material_from_form(m, is_new=True)
+
         db.session.commit()
-        return redirect(url_for('inventory'))
+        flash(f"Material '{m.name}' added.", "success")
+        return redirect(url_for("inventory"))
 
-    @app.route('/materials/<int:material_id>/reorder', methods=['GET', 'POST'])
-    def reorder(material_id):
-        material = Material.query.get_or_404(material_id)
-        suppliers = Supplier.query.all()
-        if request.method == 'POST':
-            reorder_qty = float(request.form.get('reorder_qty', 0))
-            if reorder_qty <= 0:
-                return render_template('reorder.html', material=material, suppliers=suppliers, error="Enter valid quantity.", low_count=len(get_low_stock()))
+    return render_template(
+        "add_edit_material.html",
+        material=None,
+        categories=CATEGORIES,
+        suppliers=suppliers,
+    )
 
-            supplier = Supplier.query.get(
-                material.supplier_id) if material.supplier_id else None
-            send_order_email(material, supplier, reorder_qty)
 
-            reorder_request = ReorderRequest(
-                material_id=material.id, supplier_id=supplier.id if supplier else None, requested_qty=reorder_qty, status="Pending")
-            db.session.add(reorder_request)
+@app.route("/material/edit/<int:id>", methods=["GET", "POST"])
+def edit_material(id):
+    material = Material.query.options(
+        joinedload(Material.variants)).get_or_404(id)
+    suppliers = Supplier.query.order_by(Supplier.name).all()
 
-            if not material.variants:
-                material.quantity += reorder_qty
-
-            db.session.commit()
-            return redirect(url_for('inventory'))
-
-        return render_template('reorder.html', material=material, suppliers=suppliers, low_count=len(get_low_stock()))
-
-    @app.route('/suppliers', methods=['GET', 'POST'])
-    def suppliers_view():
-        if request.method == 'POST':
-            s = Supplier(
-                name=request.form['name'],
-                contact=request.form.get('contact'),
-                address=request.form.get('address')
-            )
-            db.session.add(s)
-            db.session.commit()
-            return redirect(url_for('suppliers_view'))
-
-        suppliers = Supplier.query.order_by(Supplier.name).all()
-        return render_template('suppliers.html', suppliers=suppliers, low_count=len(get_low_stock()))
-
-    @app.route('/supplier/edit/<int:id>', methods=['GET', 'POST'])
-    def edit_supplier(id):
-        supplier = Supplier.query.get_or_404(id)
-        if request.method == 'POST':
-            supplier.name = request.form.get('name')
-            supplier.contact = request.form.get('contact')
-            supplier.address = request.form.get('address')
-            db.session.commit()
-            flash("Supplier updated successfully", "success")
-            return redirect(url_for('suppliers_view'))
-        return render_template('edit_supplier.html', supplier=supplier)
-
-    @app.route('/reorder/update/<int:id>', methods=['POST'])
-    def update_reorder_status(id):
-        reorder = ReorderRequest.query.get_or_404(id)
-        new_status = request.form.get('status')
-        reorder.status = new_status
-
-        if new_status == "Received":
-            material = Material.query.get(reorder.material_id)
-            sale = Sale(date=datetime.utcnow(), type="restock")
-            db.session.add(sale)
-            db.session.flush()
-
-            sale_item = SaleItem(
-                sale_id=sale.id,
-                material_id=material.id,
-                qty=reorder.requested_qty,
-                price=material.price_per_unit or 0
-            )
-            db.session.add(sale_item)
-            sale.total = reorder.requested_qty * (material.price_per_unit or 0)
-            material.quantity += reorder.requested_qty
-            db.session.delete(reorder)
-
+    if request.method == "POST":
+        _save_material_from_form(material, is_new=False)
         db.session.commit()
-        return redirect(url_for('notifications'))
+        flash(f"Material '{material.name}' updated.", "success")
+        return redirect(url_for("inventory"))
 
-    @app.route('/sales')
-    def sales():
-        all_sales = Sale.query.order_by(Sale.date.desc()).all()
-        sales = [s for s in all_sales if s.type == "sale"]
-        restocks = [s for s in all_sales if s.type == "restock"]
-        return render_template('sales.html', sales=sales, restocks=restocks, low_count=len(get_low_stock()))
+    return render_template(
+        "add_edit_material.html",
+        material=material,
+        categories=CATEGORIES,
+        suppliers=suppliers,
+    )
 
-    @app.route('/sales/export')
-    def sales_export():
-        sales = Sale.query.order_by(Sale.date.desc()).all()
 
-        def generate():
-            yield "Date,Material,Quantity,Price,Total\n"
-            for sale in sales:
-                for item in sale.items:
-                    yield f"{sale.date},{item.material.name},{item.qty},{item.price},{sale.total}\n"
-        return Response(generate(), mimetype="text/csv", headers={"Content-Disposition": "attachment;filename=sales_report.csv"})
+@app.route("/material/delete/<int:id>", methods=["POST"])
+def delete_material(id):
+    material = Material.query.get_or_404(id)
+    if SaleItem.query.filter_by(material_id=id).first():
+        flash("Cannot delete a material that appears in sales history.", "danger")
+        return redirect(url_for("inventory"))
+    db.session.delete(material)
+    db.session.commit()
+    flash("Material deleted.", "success")
+    return redirect(url_for("inventory"))
 
-    @app.route('/sales/clear', methods=['POST'])
-    def clear_sales():
-        SaleItem.query.delete()
-        Sale.query.delete()
+
+@app.route("/reorder/<int:material_id>", methods=["GET", "POST"])
+def reorder(material_id):
+    material = Material.query.get_or_404(material_id)
+    suppliers = Supplier.query.order_by(Supplier.name).all()
+    if request.method == "POST":
+        sid = _parse_int_optional(request.form.get("supplier_id"))
+        if sid is None:
+            flash("Please select a supplier.", "danger")
+            return redirect(url_for("reorder", material_id=material_id))
+        qty = _parse_float(request.form.get("quantity"), 0.0)
+        if qty <= 0:
+            flash("Order quantity must be greater than zero.", "danger")
+            return redirect(url_for("reorder", material_id=material_id))
+        notes = (request.form.get("notes") or "").strip()
+        rr = ReorderRequest(
+            material_id=material.id,
+            supplier_id=sid,
+            quantity=qty,
+            notes=notes or None,
+            status="Pending",
+        )
+        db.session.add(rr)
         db.session.commit()
-        flash("All sales records have been cleared.", "success")
-        return redirect(url_for('sales'))
+        flash("Reorder request recorded.", "success")
+        return redirect(url_for("inventory"))
+    return render_template("reorder.html", material=material, suppliers=suppliers)
 
-    @app.route("/checkout", methods=["POST"])
-    def checkout():
-        data = request.get_json(silent=True) or {}
-        cart = data.get("cart", [])
-        if not cart:
-            return jsonify({"success": False})
 
-        sale = Sale(date=datetime.utcnow())
-        db.session.add(sale)
-        total_amount = 0.0
+@app.route("/reorder/request/<int:id>/status", methods=["POST"])
+def update_reorder_status(id):
+    rr = ReorderRequest.query.get_or_404(id)
+    status = request.form.get("status", "").strip()
+    if status not in ("Ordered", "Received", "Pending"):
+        flash("Invalid status.", "danger")
+        return redirect(url_for("notifications"))
+    rr.status = status
+    db.session.commit()
+    flash("Reorder status updated.", "success")
+    return redirect(url_for("notifications"))
 
-        for item in cart:
-            material_id = int(item.get("id"))
-            qty = float(item.get("qty", 0))
-            price = float(item.get("price", 0))
-            variant_name = item.get("variant")
-            material = db.session.get(Material, material_id)
 
-            if variant_name:
-                variant = MaterialVariant.query.filter_by(
-                    material_id=material_id, name=variant_name).first()
-                if not variant or variant.quantity < qty:
-                    return jsonify({"success": False})
-                variant.quantity -= qty
-            else:
-                if material.quantity < qty:
-                    return jsonify({"success": False})
-                material.quantity -= qty
+@app.route("/notifications")
+def notifications():
+    # Use your helper (already filters properly)
+    low = build_low_stock_rows()
 
-            sale_item = SaleItem(
-                sale_id=sale.id, material_id=material.id, qty=qty, price=price)
-            db.session.add(sale_item)
-            total_amount += qty * price
+    return render_template(
+        "notifications.html",
+        low=low
+    )
 
-        sale.total = total_amount
+
+@app.route("/sales")
+def sales():
+    sales_list = (
+        Sale.query.options(joinedload(
+            Sale.items).joinedload(SaleItem.material))
+        .order_by(Sale.date.desc())
+        .all()
+    )
+    return render_template("sales.html", sales=sales_list)
+
+
+@app.route("/sales/<int:id>")
+def sale_view(id):
+    sale = (
+        Sale.query.options(
+            joinedload(Sale.items).joinedload(SaleItem.material),
+            joinedload(Sale.items).joinedload(SaleItem.variant),
+        )
+        .filter_by(id=id)
+        .first_or_404()
+    )
+    return render_template("sale_view.html", sale=sale)
+
+
+@app.route("/sales/clear", methods=["POST"])
+def clear_sales():
+    SaleItem.query.delete()
+    Sale.query.delete()
+    db.session.commit()
+    flash("All sales records were cleared.", "success")
+    return redirect(url_for("sales"))
+
+
+@app.route("/sales/export")
+def export_sales_csv():
+    # Query all sales with items
+    sales_list = (
+        Sale.query.options(joinedload(Sale.items).joinedload(SaleItem.material),
+                           joinedload(Sale.items).joinedload(SaleItem.variant))
+        .order_by(Sale.date.desc())
+        .all()
+    )
+
+    # Prepare CSV
+    si = StringIO()
+    writer = csv.writer(si)
+
+    # Header row
+    writer.writerow([
+        "Sale ID", "Date", "Total (₱)", "Item Name", "Variant", "Quantity", "Price per Unit", "Subtotal"
+    ])
+
+    # Data rows
+    for sale in sales_list:
+        for item in sale.items:
+            writer.writerow([
+                sale.id,
+                sale.date.strftime("%Y-%m-%d %H:%M:%S"),
+                "%.2f" % sale.total,
+                item.material.name,
+                item.variant.name if item.variant else "",
+                item.qty,
+                "%.2f" % item.price,
+                "%.2f" % (item.price * item.qty),
+            ])
+
+    output = si.getvalue()
+    si.close()
+
+    # Send as downloadable CSV
+    return Response(
+        output,
+        mimetype="text/csv",
+        headers={
+            "Content-Disposition": f"attachment;filename=sales_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"}
+    )
+
+
+@app.route("/notifications/dismiss/<int:material_id>")
+def dismiss_notification(material_id):
+    material = Material.query.get_or_404(material_id)
+
+    # Persist dismissal for low-stock notifications tied to the material.
+    material.dismiss_notification = True
+
+    # Get ALL reorder requests for this material
+    requests = ReorderRequest.query.filter_by(
+        material_id=material_id,
+        dismissed=False
+    ).all()
+
+    # Mark them as dismissed
+    for r in requests:
+        r.dismissed = True
+
+    db.session.commit()
+
+    return redirect(url_for("notifications"))
+
+
+@app.route("/suppliers", methods=["GET", "POST"])
+def suppliers():
+    if request.method == "POST":
+        name = request.form["name"]
+        contact = request.form["contact"]
+        address = request.form["address"]
+        new_supplier = Supplier(name=name, contact=contact, address=address)
+        db.session.add(new_supplier)
         db.session.commit()
-        return jsonify({"success": True})
+        flash(f"Supplier '{name}' added successfully!", "success")
+        return redirect(url_for("suppliers"))
 
-    @app.route('/supplier/delete/<int:id>', methods=['POST'])
-    def delete_supplier(id):
-        supplier = Supplier.query.get_or_404(id)
-        db.session.delete(supplier)
+    suppliers_list = Supplier.query.all()
+    return render_template("suppliers.html", suppliers=suppliers_list)
+
+
+@app.route("/supplier/edit/<int:id>", methods=["GET", "POST"])
+def edit_supplier(id):
+    supplier = Supplier.query.get_or_404(id)
+    if request.method == "POST":
+        supplier.name = request.form["name"]
+        supplier.contact = request.form["contact"]
+        supplier.address = request.form["address"]
         db.session.commit()
-        flash(f"Supplier '{supplier.name}' has been deleted.", "success")
-        return redirect(url_for('suppliers_view'))
-
-    @app.route('/notifications')
-    def notifications():
-        dismissed = session.get('dismissed_notifications', [])
-        low_materials = get_low_stock(exclude_ids=dismissed)
-        for m in low_materials:
-            m.pred_days = predict_depletion_days(m)
-        return render_template('notifications.html', low=low_materials, low_count=len(low_materials))
-
-    @app.route('/notifications/dismiss/<int:material_id>')
-    def dismiss_notification(material_id):
-        material = Material.query.get(material_id)
-        if not material:
-            flash('Notification target material not found.', 'warning')
-            return redirect(url_for('notifications'))
-
-        dismissed = session.get('dismissed_notifications', [])
-        if material_id not in dismissed:
-            dismissed.append(material_id)
-            session['dismissed_notifications'] = dismissed
-
-        flash(f"Notification for '{material.name}' dismissed.", 'success')
-        return redirect(url_for('notifications'))
-
-    @app.route('/settings')
-    def settings():
-        return render_template('settings.html', low_count=len(get_low_stock()))
-
-    @app.route('/about')
-    def about():
-        return render_template('about.html', low_count=len(get_low_stock()))
-
-    return app
+        flash(f"Supplier '{supplier.name}' updated successfully!", "success")
+        return redirect(url_for("suppliers"))
+    return render_template("edit_supplier.html", supplier=supplier)
 
 
-# ---------------- RUN APP ----------------
-app = create_app()
+@app.route("/supplier/delete/<int:id>", methods=["POST"])
+def delete_supplier(id):
+    supplier = Supplier.query.get_or_404(id)
+    db.session.delete(supplier)
+    db.session.commit()
+    flash(f"Supplier '{supplier.name}' deleted successfully!", "success")
+    return redirect(url_for("suppliers"))
 
-if __name__ == '__main__':
-    print("Running app on http://127.0.0.1:5000/")
-    app.run(debug=True, host='127.0.0.1', port=5000)
+
+@app.route("/about")
+def about():
+    return render_template("about.html")
+
+
+@app.route("/settings")
+def settings():
+    return render_template("settings.html")
+
+
+def _migrate_sqlite_schema():
+    """Add columns missing from older DB files (create_all does not alter existing tables)."""
+    engine = db.engine
+    if engine.dialect.name != "sqlite":
+        return
+    insp = inspect(engine)
+    if not insp.has_table("material"):
+        return
+    existing = {c["name"] for c in insp.get_columns("material")}
+    additions = [
+        ("category", "ALTER TABLE material ADD COLUMN category VARCHAR(120) DEFAULT ''"),
+        ("unit", "ALTER TABLE material ADD COLUMN unit VARCHAR(50) DEFAULT 'pcs'"),
+        ("reorder_point", "ALTER TABLE material ADD COLUMN reorder_point REAL DEFAULT 0"),
+        ("supplier_id", "ALTER TABLE material ADD COLUMN supplier_id INTEGER"),
+        ("dismiss_notification",
+         "ALTER TABLE material ADD COLUMN dismiss_notification BOOLEAN DEFAULT 0"),
+    ]
+    with engine.connect() as conn:
+        for col, stmt in additions:
+            if col not in existing:
+                conn.execute(text(stmt))
+        conn.commit()
+
+
+# ------------------------------
+# DATABASE INIT
+# ------------------------------
+with app.app_context():
+    db.create_all()
+    _migrate_sqlite_schema()
+
+
+# ------------------------------
+# RUN APP
+# ------------------------------
+if __name__ == "__main__":
+    app.run(debug=True)

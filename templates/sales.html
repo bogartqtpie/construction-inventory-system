@@ -10,7 +10,8 @@
         </h5>
 
         <div class="d-flex gap-2">
-            <a href="{{ url_for('sales_export') }}" class="btn"
+            <!-- Disabled Export button (prevents BuildError) -->
+            <a href="{{ url_for('export_sales_csv') }}" class="btn"
                 style="background: linear-gradient(135deg, #42d5b3 0%, #2db89b 100%); color: white; border: none; font-weight: 600; padding: 8px 16px; border-radius: 8px;">
                 <i class="bi bi-download"></i> Export CSV
             </a>
@@ -59,8 +60,7 @@
                         <td style="padding: 16px; color: #2c3e50;">{{ sale.date.strftime("%Y-%m-%d %H:%M:%S") }}</td>
                         <td class="text-end"
                             style="padding: 16px; background: linear-gradient(135deg, rgba(66, 213, 179, 0.1) 0%, rgba(45, 184, 155, 0.1) 100%); font-weight: 700; color: #42d5b3;">
-                            ₱{{ "%.2f"|format(sale.total) }}
-                        </td>
+                            ₱{{ "%.2f"|format(sale.total) }}</td>
                         <td style="padding: 16px;">
                             {% for item in sale.items %}
                             <span class="badge mb-1"

@@ -1,29 +1,19 @@
-import numpy as np
-from sklearn.linear_model import LinearRegression
-from models import Sale
+﻿from models import Sale
 
 
 def train_model():
     sales = Sale.query.all()
 
-    X = []
-    y = []
-
-    for s in sales:
-        # Temporary weather approximation
-        rain = 1 if s.date.month in [6, 7, 8, 9] else 0
-        temp = 30
-
-        X.append([s.total, rain, temp])
-        y.append(s.total)
-
-    if len(X) < 3:
+    if len(sales) < 3:
         return None
 
-    model = LinearRegression()
-    model.fit(X, y)
+    # Use average sales as simple baseline
+    total_sales = [s.total for s in sales]
+    avg_sales = sum(total_sales) / len(total_sales)
 
-    return model
+    return {
+        "avg_sales": avg_sales
+    }
 
 
 def predict_demand(model, weather_data):
@@ -33,12 +23,17 @@ def predict_demand(model, weather_data):
     predictions = []
 
     for day in weather_data:
-        sample = np.array([[50, day["rain"], day["temp"]]])
-        pred = model.predict(sample)[0]
+        base = model["avg_sales"]
+
+        # Simple adjustment based on rain
+        if day["rain"] == 1:
+            base *= 0.8   # decrease demand when rainy
+        else:
+            base *= 1.1   # increase demand when not rainy
 
         predictions.append({
             "date": day["date"],
-            "prediction": float(pred),
+            "prediction": round(base, 2),
             "rain": day["rain"]
         })
 

@@ -59,7 +59,7 @@
                     <tbody>
                         {% for item in sale.items %}
                         <tr style="border-bottom: 1px solid rgba(0, 0, 0, 0.05); transition: all 0.3s ease;">
-                            <td style="padding: 16px; color: #2c3e50; font-weight: 600;">{{ item.material.name }}</td>
+                            <td style="padding: 16px; color: #2c3e50; font-weight: 600;">{{ item.display_name }}</td>
                             <td class="text-center" style="padding: 16px; color: #2c3e50;">{{ item.qty }}</td>
                             <td class="text-end" style="padding: 16px; color: #2c3e50;">₱{{ "%.2f"|format(item.price) }}
                             </td>

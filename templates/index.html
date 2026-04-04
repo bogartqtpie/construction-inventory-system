@@ -1,77 +1,78 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block content %}
-
-<!-- 🌦️ WEATHER + INVENTORY SMART WARNING -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card modern-card shadow-sm">
-
-            <div class="card-header modern-header warning text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i class="bi bi-cloud-rain"></i> Weather-Based Inventory Insight
-                </h5>
-            </div>
-
-            <div class="card-body">
-
-                {% if weather %}
-                <div class="row">
-
-                    <!-- Weather Info -->
-                    <div class="col-md-4 text-center">
-                        <h6 class="text-muted">Current Weather</h6>
-                        <h4 class="fw-bold">{{ weather.condition }}</h4>
-                        <p class="mb-1">🌡 {{ weather.temperature }}°C</p>
-                        <p class="text-muted">{{ weather.city }}</p>
-                    </div>
-
-                    <!-- Recommendation -->
-                    <div class="col-md-8">
-
-                        {% if "rain" in weather.condition.lower() %}
-                        <div class="alert alert-warning mb-0">
-                            <h6 class="fw-bold mb-1">⚠ Rainy Season Alert</h6>
-                            Avoid overstocking:
-                            <ul class="mb-0">
-                                <li>Wood Products</li>
-                                <li>Drywall & Ceiling</li>
-                                <li>Paint-related materials</li>
-                            </ul>
-                        </div>
-
-                        {% elif "clear" in weather.condition.lower() %}
-                        <div class="alert alert-success mb-0">
-                            <h6 class="fw-bold mb-1">☀ Good Weather for Construction</h6>
-                            Recommended to stock:
-                            <ul class="mb-0">
-                                <li>Concrete & Cement</li>
-                                <li>Rebars & Structural Materials</li>
-                            </ul>
-                        </div>
-
-                        {% else %}
-                        <div class="alert alert-info mb-0">
-                            <h6 class="fw-bold mb-1">ℹ Neutral Weather</h6>
-                            Maintain balanced inventory levels.
-                        </div>
-                        {% endif %}
-
-                    </div>
-
-                </div>
-
-                {% else %}
-                <div class="alert alert-danger mb-0">
-                    ⚠ Weather data not available. Check API key or internet connection.
-                </div>
-                {% endif %}
-
-            </div>
-        </div>
-    </div>
-</div>
-
 <style>
+    .page-shell {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 1.25rem 0 2rem;
+    }
+
+    .section-block {
+        margin-top: 1.5rem;
+    }
+
+    .weather-panel {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.92) 0%, rgba(118, 75, 162, 0.92) 100%);
+        color: white;
+        border-radius: 14px;
+        padding: 16px 18px;
+        box-shadow: 0 10px 26px rgba(34, 34, 80, 0.16);
+    }
+
+    .weather-panel h6 {
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+
+    .weather-panel ul {
+        margin-bottom: 0;
+        padding-left: 1.1rem;
+    }
+
+    .weather-news-card {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.92) 0%, rgba(118, 75, 162, 0.92) 100%);
+        color: white;
+        border-radius: 14px;
+        box-shadow: 0 10px 26px rgba(34, 34, 80, 0.16);
+    }
+
+    .weather-days-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(115px, 1fr));
+        gap: 10px;
+    }
+
+    .weather-day {
+        background: rgba(255, 255, 255, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 10px;
+        padding: 10px 8px;
+        text-align: center;
+    }
+
+    .weather-icon {
+        font-size: 1.3rem;
+        margin: 6px 0;
+        display: block;
+    }
+
+    .weather-label {
+        font-size: 0.82rem;
+        opacity: 0.95;
+    }
+
+    .weather-temp {
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    #cart-table th,
+    #cart-table td,
+    #inventory-table th,
+    #inventory-table td {
+        padding: 0.72rem 0.7rem;
+    }
+
     .modern-card {
         border: none;
         border-radius: 12px;
@@ -393,7 +394,7 @@
     }
 
     .category-checkbox:checked::after {
-        content: "✓";
+        content: "âœ“";
         color: white;
         display: flex;
         align-items: center;
@@ -484,220 +485,294 @@
     }
 
     @media (max-width: 992px) {
+        .page-shell {
+            padding: 0.5rem 0 1.2rem;
+        }
+
         .inventory-scroll-container {
             max-height: 350px;
         }
     }
 </style>
 
-<div class="row g-4">
-    <!-- 🛒 POS / Cart Section - FULL WIDTH -->
-    <div class="col-12">
-        <div class="card modern-card shadow-sm">
-            <div class="card-header modern-header text-white">
-                <h5 class="mb-0"><i class="bi bi-cart-plus"></i> Point of Sale (Cashier)</h5>
-            </div>
-            <div class="card-body p-4">
-                <form class="mb-3">
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Material</label>
-                        <div class="material-search-container">
-                            <input type="text" id="material-search" class="material-search-input"
-                                placeholder="Search or select material...">
-                            <div class="material-dropdown" id="material-dropdown">
-                                {% for m in materials %}
-                                {% set variants_json = '[]' %}
-                                {% if m.variants %}
-                                {% set variants_list = [] %}
-                                {% for v in m.variants %}
-                                {% set _ = variants_list.append({'id': v.id, 'name': v.name, 'quantity': v.quantity,
-                                'unit': v.unit, 'price': v.price}) %}
-                                {% endfor %}
-                                {% set variants_json = variants_list|tojson %}
-                                {% endif %}
-                                <div class="material-option" data-id="{{ m.id }}" data-unit="{{ m.unit }}"
-                                    data-price="{{ m.price_per_unit }}" data-name="{{ m.name }}"
-                                    data-variants='{{ variants_json }}'>
-                                    <div>
-                                        <div style="font-weight: 500;">{{ m.name }}</div>
-                                        <div style="font-size: 12px; color: #999;">{{ m.category }} • {{ m.unit }}</div>
-                                    </div>
+<div class="page-shell">
+
+    <div class="row g-4 section-block">
+        <!-- ðŸ›’ POS / Cart Section - FULL WIDTH -->
+        <div class="col-12">
+            <div class="card modern-card shadow-sm">
+                <div class="card-header"
+                    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; padding: 20px 30px;">
+                    <h5 class="mb-0" style="font-weight: 700; font-size: 24px; letter-spacing: 0.5px; color: white;">
+                        <i class="bi bi-cart-plus" style="margin-right: 10px;"></i> Point of Sale (Cashier)
+                    </h5>
+                </div>
+                <div class="card-body p-4">
+                    <form class="mb-3">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Material</label>
+                            <div class="material-search-container">
+                                <input type="text" id="material-search" class="material-search-input"
+                                    placeholder="Search or select material...">
+                                <div class="material-dropdown" id="material-dropdown">
+                                    {% for m in materials %}
+                                    {% set variants_json = '[]' %}
                                     {% if m.variants %}
-                                    {% set total_qty = m.variants|map(attribute='quantity')|sum %}
-                                    <span class="quantity-badge {% if total_qty <= m.reorder_point %}low{% endif %}">
-                                        {{ total_qty }} {{ m.unit }}
-                                    </span>
-                                    {% else %}
-                                    <span class="quantity-badge {% if m.quantity <= m.reorder_point %}low{% endif %}">
-                                        {{ m.quantity }} {{ m.unit }}
-                                    </span>
+                                    {% set variants_list = [] %}
+                                    {% for v in m.variants %}
+                                    {% set _ = variants_list.append({'id': v.id, 'name': v.name, 'quantity': v.quantity,
+                                    'unit': v.unit, 'price': v.price}) %}
+                                    {% endfor %}
+                                    {% set variants_json = variants_list|tojson %}
                                     {% endif %}
+                                    <div class="material-option" data-id="{{ m.id }}" data-unit="{{ m.unit }}"
+                                        data-price="{{ m.price_per_unit }}" data-name="{{ m.name }}"
+                                        data-variants='{{ variants_json }}'>
+                                        <div>
+                                            <div style="font-weight: 500;">{{ m.name }}</div>
+                                            <div style="font-size: 12px; color: #999;">{{ m.category }} â€¢ {{ m.unit }}
+                                            </div>
+                                        </div>
+                                        {% if m.variants %}
+                                        {% set total_qty = m.variants|map(attribute='quantity')|sum %}
+                                        <span
+                                            class="quantity-badge {% if total_qty <= m.reorder_point %}low{% endif %}">
+                                            {{ total_qty }} {{ m.unit }}
+                                        </span>
+                                        {% else %}
+                                        <span
+                                            class="quantity-badge {% if m.quantity <= m.reorder_point %}low{% endif %}">
+                                            {{ m.quantity }} {{ m.unit }}
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    {% endfor %}
                                 </div>
-                                {% endfor %}
+                            </div>
+                            <div class="material-selected" id="material-selected"
+                                style="margin-top: 10px; display: none;">
+                                <i class="bi bi-check-circle"></i> <span id="selected-name"></span>
+                            </div>
+
+                            <!-- Variant Selector -->
+                            <div class="variant-selector" id="variant-selector">
+                                <label class="form-label fw-semibold mb-3"><i class="bi bi-diagram-3"></i> Select
+                                    Variant</label>
+                                <div id="variant-options-container"></div>
                             </div>
                         </div>
-                        <div class="material-selected" id="material-selected" style="margin-top: 10px; display: none;">
-                            <i class="bi bi-check-circle"></i> <span id="selected-name"></span>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="qty" class="form-label fw-semibold">Quantity</label>
+                                <input id="qty" type="number" class="form-control" min="1" value="1">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="price" class="form-label fw-semibold">Price per Unit (₱)</label>
+                                <input id="price" type="number" step="0.01" class="form-control" value="0">
+                            </div>
                         </div>
 
-                        <!-- Variant Selector -->
-                        <div class="variant-selector" id="variant-selector">
-                            <label class="form-label fw-semibold mb-3"><i class="bi bi-diagram-3"></i> Select
-                                Variant</label>
-                            <div id="variant-options-container"></div>
-                        </div>
+                        <button id="add-to-cart" type="button" class="btn btn-primary w-100">
+                            <i class="bi bi-bag-plus"></i> Add to Cart
+                        </button>
+                    </form>
+
+                    <hr class="my-4">
+
+                    <h6 class="fw-bold mb-3"><i class="bi bi-basket"></i> Cart</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle" id="cart-table">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Material</th>
+                                    <th>Qty</th>
+                                    <th>Price</th>
+                                    <th>Subtotal</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="cart-body"></tbody>
+                        </table>
                     </div>
 
-                    <div class="row">
-                        <div class="col-md-6 mb-3">
-                            <label for="qty" class="form-label fw-semibold">Quantity</label>
-                            <input id="qty" type="number" class="form-control" min="1" value="1">
-                        </div>
-                        <div class="col-md-6 mb-3">
-                            <label for="price" class="form-label fw-semibold">Price per Unit (₱)</label>
-                            <input id="price" type="number" step="0.01" class="form-control" value="0">
-                        </div>
-                    </div>
-
-                    <button id="add-to-cart" type="button" class="btn btn-primary w-100">
-                        <i class="bi bi-bag-plus"></i> Add to Cart
-                    </button>
-                </form>
-
-                <hr class="my-4">
-
-                <h6 class="fw-bold mb-3"><i class="bi bi-basket"></i> Cart</h6>
-                <div class="table-responsive">
-                    <table class="table table-sm align-middle" id="cart-table">
-                        <thead class="table-light">
-                            <tr>
-                                <th>Material</th>
-                                <th>Qty</th>
-                                <th>Price</th>
-                                <th>Subtotal</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody id="cart-body"></tbody>
-                    </table>
-                </div>
-
-                <div class="d-flex justify-content-between align-items-center mt-3 p-3 rounded"
-                    style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);">
-                    <h5 class="mb-0 fw-bold">Total: ₱ <span id="total">0.00</span></h5>
-                    <button id="checkout" class="btn btn-success">
-                        <i class="bi bi-cash-coin"></i> Checkout
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!--  Quick Inventory - FULL WIDTH -->
-<div class="row g-4 mt-2">
-    <div class="col-12">
-        <div class="card modern-card shadow-sm">
-            <div class="card-header modern-header dark text-white">
-                <h5 class="mb-0"><i class="bi bi-box2-check"></i> Quick Inventory</h5>
-            </div>
-            <div class="card-body p-4">
-                <div class="row">
-                    <!-- Category Filter (Left Column) -->
-                    <div class="col-lg-3">
-                        <label class="category-filter-label"><i class="bi bi-funnel"></i> Filter by Category</label>
-                        <div class="category-filter-group" id="category-filter-group"
-                            style="flex-direction: column; align-items: flex-start; gap: 10px;">
-                            <!-- Categories will be populated by JavaScript -->
-                        </div>
-                        <button class="category-clear-btn mt-2" id="clear-category-filter" style="display: none;">
-                            <i class="bi bi-x-circle"></i> Clear Filters
+                    <div class="d-flex justify-content-between align-items-center mt-3 p-3 rounded"
+                        style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);">
+                        <h5 class="mb-0 fw-bold">Total: ₱<span id="total">0.00</span></h5>
+                        <button id="checkout" class="btn btn-success">
+                            <i class="bi bi-cash-coin"></i> Checkout
                         </button>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-                    <!-- Scrollable Table (Right Column) -->
-                    <div class="col-lg-9">
-                        <!-- Search Bar -->
-                        <div class="inventory-search-container" style="margin-bottom: 10px;">
-                            <input type="text" id="inventory-search" class="inventory-search-input"
-                                placeholder="Search materials...">
+    {% if warning %}
+    <div class="row g-4 section-block">
+        <div class="col-12">
+            <div class="card weather-news-card border-0">
+                <div class="card-body p-4">
+                    <h5 class="mb-0"><i class="bi bi-cloud-drizzle"></i> Weather Update</h5>
+                    <p class="mb-0 mt-2">{{ warning }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% elif weather_days %}
+    <div class="row g-4 section-block">
+        <div class="col-12">
+            <div class="card weather-news-card border-0">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                        <h5 class="mb-0"><i class="bi bi-broadcast"></i> Weather Report</h5>
+                        <div class="fw-semibold">{{ weather_days[0].date_label }} - {{ weather_days[-1].date_label }}
+                        </div>
+                    </div>
+                    <div class="weather-days-grid">
+                        {% for d in weather_days %}
+                        {% set c = d.condition|lower %}
+                        <div class="weather-day">
+                            <div class="fw-semibold">{{ d.day_name }}</div>
+                            <div class="weather-label">{{ d.date_label }}</div>
+                            <span class="weather-icon">
+                                {% if 'rain' in c or 'drizzle' in c or 'thunder' in c %}
+                                <i class="bi bi-cloud-rain-heavy-fill"></i>
+                                {% elif 'cloud' in c or 'mist' in c or 'fog' in c %}
+                                <i class="bi bi-cloud-fill"></i>
+                                {% else %}
+                                <i class="bi bi-sun-fill"></i>
+                                {% endif %}
+                            </span>
+                            <div class="weather-label">{{ d.condition }}</div>
+                            {% if d.min_temp is not none and d.max_temp is not none %}
+                            <div class="weather-temp">{{ d.min_temp }}&deg;C - {{ d.max_temp }}&deg;C</div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% if advice %}
+                    <div class="mt-3 pt-2" style="border-top: 1px solid rgba(255,255,255,0.25);">
+                        <div class="small fw-semibold mb-1">Inventory Advice</div>
+                        <ul class="mb-0 small">
+                            {% for item in advice %}
+                            <li>{{ item }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!--  Quick Inventory - FULL WIDTH -->
+    <div class="row g-4 section-block">
+        <div class="col-12">
+            <div class="card modern-card shadow-sm">
+                <div class="card-header modern-header dark text-white">
+                    <h5 class="mb-0"><i class="bi bi-box2-check"></i> Quick Inventory</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row">
+                        <!-- Category Filter (Left Column) -->
+                        <div class="col-lg-3">
+                            <label class="category-filter-label"><i class="bi bi-funnel"></i> Filter by Category</label>
+                            <div class="category-filter-group" id="category-filter-group"
+                                style="flex-direction: column; align-items: flex-start; gap: 10px;">
+                                <!-- Categories will be populated by JavaScript -->
+                            </div>
+                            <button class="category-clear-btn mt-2" id="clear-category-filter" style="display: none;">
+                                <i class="bi bi-x-circle"></i> Clear Filters
+                            </button>
                         </div>
 
-                        <!-- Scrollable Table -->
-                        <div class="inventory-scroll-container">
-                            <div class="table-responsive">
-                                <table class="table table-sm align-middle" id="inventory-table">
-                                    <thead class="table-light">
-                                        <tr>
-                                            <th style="width: 40%;">Material</th>
-                                            <th style="width: 20%;">Category</th>
-                                            <th style="width: 20%;">Qty</th>
-                                            <th style="width: 20%;">Status</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {% for m in materials %}
-                                        <tr class="inventory-row" data-material-id="{{ m.id }}"
-                                            data-category="{{ m.category }}">
-                                            <td>
-                                                <div style="display: flex; align-items: center;">
-                                                    {% if m.variants %}
-                                                    <button class="inventory-expand-btn" type="button"
-                                                        title="Show variants">
-                                                        <i class="bi bi-chevron-down"></i>
-                                                    </button>
-                                                    {% else %}
-                                                    <span style="width: 24px;"></span>
-                                                    {% endif %}
-                                                    <strong style="font-size: 13px;">{{ m.name }}</strong>
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <span class="category-badge">{{ m.category }}</span>
-                                            </td>
-                                            <td style="font-size: 13px;">
-                                                {% if m.variants %}
-                                                {{ m.variants|map(attribute='quantity')|sum }}
-                                                {% else %}
-                                                {{ m.quantity }}
-                                                {% endif %}
-                                            </td>
-                                            <td>
-                                                {% set total_qty = m.variants|map(attribute='quantity')|sum if
-                                                m.variants else m.quantity %}
-                                                {% if total_qty <= m.reorder_point %} <span class="badge bg-danger"
-                                                    style="font-size: 11px;"><i class="bi bi-exclamation-circle"></i>
-                                                    LOW</span>
-                                                    {% else %}
-                                                    <span class="badge bg-success" style="font-size: 11px;"><i
-                                                            class="bi bi-check-circle"></i> OK</span>
-                                                    {% endif %}
-                                            </td>
-                                        </tr>
-                                        {% if m.variants %}
-                                        <tr class="inventory-variants-row" data-variants-for="{{ m.id }}"
-                                            data-category="{{ m.category }}">
-                                            <td colspan="4">
-                                                <div class="inventory-variants-content">
-                                                    {% for v in m.variants %}
-                                                    <div class="variant-item">
-                                                        <span class="variant-item-name">📦 {{ v.name }}</span>
-                                                        <span class="variant-item-qty">{{ v.quantity }} {{ v.unit
-                                                            }}</span>
-                                                        {% set is_low = v.quantity <= m.reorder_point %} <span
-                                                            class="badge" style="font-size: 10px;"
-                                                            :class="is_low ? 'bg-warning' : 'bg-info'">
-                                                            {{ 'LOW' if is_low else 'OK' }}
-                                                            </span>
+                        <!-- Scrollable Table (Right Column) -->
+                        <div class="col-lg-9">
+                            <!-- Search Bar -->
+                            <div class="inventory-search-container" style="margin-bottom: 10px;">
+                                <input type="text" id="inventory-search" class="inventory-search-input"
+                                    placeholder="Search materials...">
+                            </div>
+
+                            <!-- Scrollable Table -->
+                            <div class="inventory-scroll-container">
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle" id="inventory-table">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th style="width: 40%;">Material</th>
+                                                <th style="width: 20%;">Category</th>
+                                                <th style="width: 20%;">Qty</th>
+                                                <th style="width: 20%;">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for m in materials %}
+                                            <tr class="inventory-row" data-material-id="{{ m.id }}"
+                                                data-category="{{ m.category }}">
+                                                <td>
+                                                    <div style="display: flex; align-items: center;">
+                                                        {% if m.variants %}
+                                                        <button class="inventory-expand-btn" type="button"
+                                                            title="Show variants">
+                                                            <i class="bi bi-chevron-down"></i>
+                                                        </button>
+                                                        {% else %}
+                                                        <span style="width: 24px;"></span>
+                                                        {% endif %}
+                                                        <strong style="font-size: 13px;">{{ m.name }}</strong>
                                                     </div>
-                                                    {% endfor %}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        {% endif %}
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
+                                                </td>
+                                                <td>
+                                                    <span class="category-badge">{{ m.category }}</span>
+                                                </td>
+                                                <td style="font-size: 13px;">
+                                                    {% if m.variants %}
+                                                    {{ m.variants|map(attribute='quantity')|sum }}
+                                                    {% else %}
+                                                    {{ m.quantity }}
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    {% set total_qty = m.variants|map(attribute='quantity')|sum if
+                                                    m.variants else m.quantity %}
+                                                    {% if total_qty <= m.reorder_point %} <span class="badge bg-danger"
+                                                        style="font-size: 11px;"><i
+                                                            class="bi bi-exclamation-circle"></i>
+                                                        LOW</span>
+                                                        {% else %}
+                                                        <span class="badge bg-success" style="font-size: 11px;"><i
+                                                                class="bi bi-check-circle"></i> OK</span>
+                                                        {% endif %}
+                                                </td>
+                                            </tr>
+                                            {% if m.variants %}
+                                            <tr class="inventory-variants-row" data-variants-for="{{ m.id }}"
+                                                data-category="{{ m.category }}">
+                                                <td colspan="4">
+                                                    <div class="inventory-variants-content">
+                                                        {% for v in m.variants %}
+                                                        <div class="variant-item">
+                                                            <span class="variant-item-name">ðŸ“¦ {{ v.name }}</span>
+                                                            <span class="variant-item-qty">{{ v.quantity }} {{ v.unit
+                                                                }}</span>
+                                                            {% set is_low = v.quantity <= m.reorder_point %} <span
+                                                                class="badge" style="font-size: 10px;"
+                                                                :class="is_low ? 'bg-warning' : 'bg-info'">
+                                                                {{ 'LOW' if is_low else 'OK' }}
+                                                                </span>
+                                                        </div>
+                                                        {% endfor %}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {% endif %}
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -705,38 +780,39 @@
             </div>
         </div>
     </div>
-</div>
 
-<!-- 💡 Tips at the Bottom - FULL WIDTH -->
-<div class="row g-4 mt-2">
-    <div class="col-12">
-        <div class="card modern-card shadow-sm tips-card border-0">
-            <div class="card-header modern-header warning text-white">
-                <h5 class="mb-0" style="color: white;"><i class="bi bi-lightbulb"></i> Tips & Guidelines</h5>
-            </div>
-            <div class="card-body p-4">
-                <div class="row">
-                    <div class="col-md-6 mb-3 mb-md-0">
-                        <p class="mb-0">
-                            <i class="bi bi-check-circle-fill text-success me-2"></i>
-                            Use the cart to add multiple items and click <strong>Checkout</strong>
-                            to record sales and automatically deduct stock.
-                        </p>
-                    </div>
-                    <div class="col-md-6">
-                        <p class="mb-0">
-                            <i class="bi bi-bell-fill text-warning me-2"></i>
-                            Low-stock items will appear in <strong>Notifications</strong>.
-                            Check the Quick Inventory section for real-time stock status.
-                        </p>
+    <!-- ðŸ’¡ Tips at the Bottom - FULL WIDTH -->
+    <div class="row g-4 section-block">
+        <div class="col-12">
+            <div class="card modern-card shadow-sm tips-card border-0">
+                <div class="card-header modern-header warning text-white">
+                    <h5 class="mb-0" style="color: white;"><i class="bi bi-lightbulb"></i> Tips & Guidelines</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row">
+                        <div class="col-md-6 mb-3 mb-md-0">
+                            <p class="mb-0">
+                                <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                Use the cart to add multiple items and click <strong>Checkout</strong>
+                                to record sales and automatically deduct stock.
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="mb-0">
+                                <i class="bi bi-bell-fill text-warning me-2"></i>
+                                Low-stock items will appear in <strong>Notifications</strong>.
+                                Check the Quick Inventory section for real-time stock status.
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+
 </div>
 
-<!-- ✅ Checkout Success Modal -->
+<!-- âœ… Checkout Success Modal -->
 <div class="modal fade" id="checkoutSuccessModal" tabindex="-1" aria-labelledby="checkoutSuccessModalLabel"
     aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -758,7 +834,7 @@
     </div>
 </div>
 
-<!-- 🧩 POS Script -->
+<!-- ðŸ§© POS Script -->
 <script>
     document.addEventListener("DOMContentLoaded", () => {
         const materialSearch = document.getElementById("material-search");
@@ -973,8 +1049,9 @@
                     <label class="variant-option">
                         <input type="radio" name="variant" value="${variant.id}" data-name="${variant.name}" data-price="${variant.price}">
                         <div class="variant-info">
-                            <span>${variant.name} • ${variant.quantity} ${variant.unit}</span>
-                            <span class="variant-price">₱${parseFloat(variant.price).toFixed(2)}</span>
+                            <span>${variant.name} â€¢ ${variant.quantity} ${variant.unit}</span>
+                            <span class="variant-price">₱
+${parseFloat(variant.price).toFixed(2)}</span>
                         </div>
                     </label>
                 `;
