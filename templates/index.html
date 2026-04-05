@@ -529,7 +529,7 @@
                                         data-variants='{{ variants_json }}'>
                                         <div>
                                             <div style="font-weight: 500;">{{ m.name }}</div>
-                                            <div style="font-size: 12px; color: #999;">{{ m.category }} â€¢ {{ m.unit }}
+                                            <div style="font-size: 12px; color: #999;">{{ m.category }} {{ m.unit }}
                                             </div>
                                         </div>
                                         {% if m.variants %}
@@ -1048,7 +1048,7 @@
                     <label class="variant-option">
                         <input type="radio" name="variant" value="${variant.id}" data-name="${variant.name}" data-price="${variant.price}">
                         <div class="variant-info">
-                            <span>${variant.name} â€¢ ${variant.quantity} ${variant.unit}</span>
+                            <span>${variant.name} ${variant.quantity} ${variant.unit}</span>
                             <span class="variant-price">₱
 ${parseFloat(variant.price).toFixed(2)}</span>
                         </div>

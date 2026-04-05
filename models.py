@@ -97,7 +97,7 @@ class ReorderRequest(db.Model):
     requested_qty = db.Column(db.Float, nullable=False)
     request_date = db.Column(db.DateTime, default=datetime.utcnow)
     status = db.Column(db.String(50), default="Pending")
-    dismissed = db.Column(db.Boolean, default=False)  # ✅ For dismiss button
+    dismissed = db.Column(db.Boolean, default=False)  # For dismiss button
 
     def mark_received(self):
         if self.material_ref:

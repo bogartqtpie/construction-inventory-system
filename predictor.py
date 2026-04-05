@@ -1,4 +1,4 @@
-﻿from models import Sale
+from models import Sale
 
 
 def train_model():

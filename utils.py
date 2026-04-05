@@ -1,4 +1,4 @@
-﻿# utils.py
+# utils.py
 from datetime import datetime
 from models import Material, UsageLog
 import numpy as np
