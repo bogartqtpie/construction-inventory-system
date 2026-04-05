@@ -394,7 +394,6 @@
     }
 
     .category-checkbox:checked::after {
-        content: "âœ“";
         color: white;
         display: flex;
         align-items: center;
@@ -498,7 +497,7 @@
 <div class="page-shell">
 
     <div class="row g-4 section-block">
-        <!-- ðŸ›’ POS / Cart Section - FULL WIDTH -->
+        <!-- POS / Cart Section - FULL WIDTH -->
         <div class="col-12">
             <div class="card modern-card shadow-sm">
                 <div class="card-header"
@@ -755,7 +754,7 @@
                                                     <div class="inventory-variants-content">
                                                         {% for v in m.variants %}
                                                         <div class="variant-item">
-                                                            <span class="variant-item-name">ðŸ“¦ {{ v.name }}</span>
+                                                            <span class="variant-item-name"> {{ v.name }}</span>
                                                             <span class="variant-item-qty">{{ v.quantity }} {{ v.unit
                                                                 }}</span>
                                                             {% set is_low = v.quantity <= m.reorder_point %} <span
@@ -781,7 +780,7 @@
         </div>
     </div>
 
-    <!-- ðŸ’¡ Tips at the Bottom - FULL WIDTH -->
+    <!-- Tips at the Bottom - FULL WIDTH -->
     <div class="row g-4 section-block">
         <div class="col-12">
             <div class="card modern-card shadow-sm tips-card border-0">
@@ -812,7 +811,7 @@
 
 </div>
 
-<!-- âœ… Checkout Success Modal -->
+<!-- Checkout Success Modal -->
 <div class="modal fade" id="checkoutSuccessModal" tabindex="-1" aria-labelledby="checkoutSuccessModalLabel"
     aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -834,7 +833,7 @@
     </div>
 </div>
 
-<!-- ðŸ§© POS Script -->
+<!-- POS Script -->
 <script>
     document.addEventListener("DOMContentLoaded", () => {
         const materialSearch = document.getElementById("material-search");
