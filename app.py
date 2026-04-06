@@ -254,9 +254,28 @@ def build_low_stock_rows():
     return rows
 
 
+def _material_total_quantity(material):
+    if material.variants:
+        return sum(v.quantity for v in material.variants)
+    return material.quantity
+
+
+def _sort_materials_for_quick_inventory(materials):
+    return sorted(
+        materials,
+        key=lambda m: (
+            _material_total_quantity(m) > m.reorder_point,
+            (m.name or "").lower(),
+        ),
+    )
+
+
 def inventory_json_payload():
     out = []
-    for m in Material.query.options(joinedload(Material.variants)).all():
+    materials = _sort_materials_for_quick_inventory(
+        Material.query.options(joinedload(Material.variants)).all()
+    )
+    for m in materials:
         out.append(
             {
                 "id": m.id,
@@ -479,7 +498,9 @@ def build_weather_days(data, max_days=5):
 
 @app.route("/")
 def index():
-    materials = Material.query.options(joinedload(Material.variants)).all()
+    materials = _sort_materials_for_quick_inventory(
+        Material.query.options(joinedload(Material.variants)).all()
+    )
 
     weather_data = get_weather()
 
