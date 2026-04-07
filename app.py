@@ -23,9 +23,26 @@ app = Flask(
 )
 app.secret_key = os.environ.get("SECRET_KEY", "fallback_secret")
 
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + os.path.join(
-    instance_path, "YOUR_DB_NAME.db"
-)
+
+database_url = os.getenv("DATABASE_URL")
+local_db_filename = os.getenv("LOCAL_DB_FILENAME", "inventory.db")
+local_db_path = os.path.join(instance_path, local_db_filename)
+render_service = os.getenv("RENDER") == "true"
+
+if database_url:
+    # Fix for Render PostgreSQL
+    if database_url.startswith("postgres://"):
+        database_url = database_url.replace("postgres://", "postgresql://", 1)
+
+    app.config["SQLALCHEMY_DATABASE_URI"] = database_url
+else:
+    if render_service:
+        raise RuntimeError(
+            "DATABASE_URL is required on Render. "
+            "Use a persistent Render Postgres database instead of SQLite."
+        )
+    # Keep local development on a stable file inside instance/.
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + local_db_path
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
@@ -884,21 +901,50 @@ def _migrate_sqlite_schema():
     if engine.dialect.name != "sqlite":
         return
     insp = inspect(engine)
-    if not insp.has_table("material"):
-        return
-    existing = {c["name"] for c in insp.get_columns("material")}
-    additions = [
-        ("category", "ALTER TABLE material ADD COLUMN category VARCHAR(120) DEFAULT ''"),
-        ("unit", "ALTER TABLE material ADD COLUMN unit VARCHAR(50) DEFAULT 'pcs'"),
-        ("reorder_point", "ALTER TABLE material ADD COLUMN reorder_point REAL DEFAULT 0"),
-        ("supplier_id", "ALTER TABLE material ADD COLUMN supplier_id INTEGER"),
-        ("dismiss_notification",
-         "ALTER TABLE material ADD COLUMN dismiss_notification BOOLEAN DEFAULT 0"),
-    ]
+
     with engine.connect() as conn:
-        for col, stmt in additions:
-            if col not in existing:
-                conn.execute(text(stmt))
+        if insp.has_table("material"):
+            material_columns = {c["name"] for c in insp.get_columns("material")}
+            material_additions = [
+                ("category", "ALTER TABLE material ADD COLUMN category VARCHAR(120) DEFAULT ''"),
+                ("unit", "ALTER TABLE material ADD COLUMN unit VARCHAR(50) DEFAULT 'pcs'"),
+                ("reorder_point", "ALTER TABLE material ADD COLUMN reorder_point REAL DEFAULT 0"),
+                ("supplier_id", "ALTER TABLE material ADD COLUMN supplier_id INTEGER"),
+                ("dismiss_notification",
+                 "ALTER TABLE material ADD COLUMN dismiss_notification BOOLEAN DEFAULT 0"),
+            ]
+            for col, stmt in material_additions:
+                if col not in material_columns:
+                    conn.execute(text(stmt))
+
+        if insp.has_table("reorder_request"):
+            reorder_columns = {c["name"] for c in insp.get_columns("reorder_request")}
+            reorder_additions = [
+                ("quantity", "ALTER TABLE reorder_request ADD COLUMN quantity REAL DEFAULT 0"),
+                ("notes", "ALTER TABLE reorder_request ADD COLUMN notes TEXT"),
+                ("dismissed", "ALTER TABLE reorder_request ADD COLUMN dismissed BOOLEAN DEFAULT 0"),
+            ]
+            for col, stmt in reorder_additions:
+                if col not in reorder_columns:
+                    conn.execute(text(stmt))
+
+            # Older databases stored the requested amount in requested_qty.
+            if "requested_qty" in reorder_columns and "quantity" not in reorder_columns:
+                conn.execute(text(
+                    "UPDATE reorder_request "
+                    "SET quantity = COALESCE(requested_qty, 0) "
+                    "WHERE quantity IS NULL OR quantity = 0"
+                ))
+
+        if insp.has_table("sale_item"):
+            sale_item_columns = {c["name"] for c in insp.get_columns("sale_item")}
+            sale_item_additions = [
+                ("variant_id", "ALTER TABLE sale_item ADD COLUMN variant_id INTEGER"),
+            ]
+            for col, stmt in sale_item_additions:
+                if col not in sale_item_columns:
+                    conn.execute(text(stmt))
+
         conn.commit()
 
 
