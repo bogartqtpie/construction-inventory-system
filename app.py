@@ -9,8 +9,6 @@ from flask import Flask, flash, jsonify, redirect, render_template, request, url
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import joinedload
-from dotenv import load_dotenv
-load_dotenv()
 
 
 basedir = os.path.abspath(os.path.dirname(__file__))
