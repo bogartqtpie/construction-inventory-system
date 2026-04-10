@@ -325,9 +325,14 @@ def _save_material_from_form(material, is_new):
     existing_variants = {v.name: v for v in material.variants}
 
     if variant_rows:
-        material.quantity = 0.0  # disable main stock if variants exist
+        # IMPORTANT: sync mode (variants control stock)
+        material.quantity = 0.0
+
+        used_names = set()
 
         for name, q, u, p in variant_rows:
+            used_names.add(name)
+
             if name in existing_variants:
                 v = existing_variants[name]
                 v.quantity = q
@@ -343,8 +348,19 @@ def _save_material_from_form(material, is_new):
                         price=p,
                     )
                 )
+
+        # 🔥 DELETE removed variants (VERY IMPORTANT FIX)
+        for name, v in existing_variants.items():
+            if name not in used_names:
+                db.session.delete(v)
+
     else:
+        # fallback: no variants = use main stock
         material.quantity = _parse_float(request.form.get("quantity"), 0.0)
+
+        # 🔥 optional cleanup: remove all variants if switching back
+        for v in material.variants:
+            db.session.delete(v)
 
 
 # ------------------------------
