@@ -9,8 +9,9 @@ from flask import Flask, flash, jsonify, redirect, render_template, request, url
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import joinedload
+from dotenv import load_dotenv
+load_dotenv()
 
-from inventory_seeder import seed_inventory_from_text_with_app_context
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 instance_path = os.path.join(basedir, "instance")
@@ -337,21 +338,28 @@ def _save_material_from_form(material, is_new):
 
     if variant_rows:
         material.quantity = 0.0
-        if not is_new:
-            MaterialVariant.query.filter_by(material_id=material.id).delete()
+
+        existing_variants = {v.id: v for v in material.variants}
+
         for name, q, u, p in variant_rows:
-            db.session.add(
-                MaterialVariant(
-                    material_id=material.id,
-                    name=name,
-                    quantity=q,
-                    unit=u,
-                    price=p,
+            if name in existing_variants:
+                # ✅ update existing variant
+                v = existing_variants[name]
+                v.quantity = q
+                v.unit = u
+                v.price = p
+            else:
+                # ✅ create new variant
+                db.session.add(
+                    MaterialVariant(
+                        material_id=material.id,
+                        name=name,
+                        quantity=q,
+                        unit=u,
+                        price=p,
+                    )
                 )
-            )
     else:
-        if not is_new:
-            MaterialVariant.query.filter_by(material_id=material.id).delete()
         material.quantity = _parse_float(request.form.get("quantity"), 0.0)
 
 
@@ -538,16 +546,6 @@ def index():
         advice=advice,
         weather_days=weather_days,
     )
-
-
-@app.route("/admin/seed_inventory", methods=["GET", "POST"])
-def seed_inventory():
-    results = None
-    if request.method == "POST":
-        seed_text = request.form.get("seed_text", "")
-        results = seed_inventory_from_text_with_app_context(seed_text)
-        flash("Inventory seed/import completed.", "success")
-    return render_template("seed_inventory.html", results=results)
 
 
 @app.route("/checkout", methods=["POST"])
@@ -904,11 +902,13 @@ def _migrate_sqlite_schema():
 
     with engine.connect() as conn:
         if insp.has_table("material"):
-            material_columns = {c["name"] for c in insp.get_columns("material")}
+            material_columns = {c["name"]
+                                for c in insp.get_columns("material")}
             material_additions = [
                 ("category", "ALTER TABLE material ADD COLUMN category VARCHAR(120) DEFAULT ''"),
                 ("unit", "ALTER TABLE material ADD COLUMN unit VARCHAR(50) DEFAULT 'pcs'"),
-                ("reorder_point", "ALTER TABLE material ADD COLUMN reorder_point REAL DEFAULT 0"),
+                ("reorder_point",
+                 "ALTER TABLE material ADD COLUMN reorder_point REAL DEFAULT 0"),
                 ("supplier_id", "ALTER TABLE material ADD COLUMN supplier_id INTEGER"),
                 ("dismiss_notification",
                  "ALTER TABLE material ADD COLUMN dismiss_notification BOOLEAN DEFAULT 0"),
@@ -918,7 +918,8 @@ def _migrate_sqlite_schema():
                     conn.execute(text(stmt))
 
         if insp.has_table("reorder_request"):
-            reorder_columns = {c["name"] for c in insp.get_columns("reorder_request")}
+            reorder_columns = {c["name"]
+                               for c in insp.get_columns("reorder_request")}
             reorder_additions = [
                 ("quantity", "ALTER TABLE reorder_request ADD COLUMN quantity REAL DEFAULT 0"),
                 ("notes", "ALTER TABLE reorder_request ADD COLUMN notes TEXT"),
@@ -937,7 +938,8 @@ def _migrate_sqlite_schema():
                 ))
 
         if insp.has_table("sale_item"):
-            sale_item_columns = {c["name"] for c in insp.get_columns("sale_item")}
+            sale_item_columns = {c["name"]
+                                 for c in insp.get_columns("sale_item")}
             sale_item_additions = [
                 ("variant_id", "ALTER TABLE sale_item ADD COLUMN variant_id INTEGER"),
             ]

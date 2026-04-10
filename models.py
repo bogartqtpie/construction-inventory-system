@@ -12,6 +12,7 @@ class Supplier(db.Model):
     name = db.Column(db.String(150), nullable=False)
     contact = db.Column(db.String(150))
     address = db.Column(db.String(250))
+    email = db.Column(db.String(120))
 
     materials = db.relationship(
         "Material",

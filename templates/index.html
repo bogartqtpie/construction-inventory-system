@@ -908,6 +908,11 @@
                 materialSearch.value = name;
                 priceInput.value = price;
                 selectedName.textContent = `${name} selected`;
+                const availableQty = selectedOption.querySelector(".quantity-badge")?.textContent || "";
+                const maxQty = parseInt(availableQty);
+                if (!isNaN(maxQty)) {
+                qtyInput.max = maxQty;
+                }
 
                 materialSelected.style.display = "block";
                 materialDropdown.classList.remove("show");
@@ -1081,6 +1086,12 @@ ${parseFloat(variant.price).toFixed(2)}</span>
 
             const price = parseFloat(priceInput.value);
             const qty = parseInt(qtyInput.value);
+            const maxQty = parseInt(qtyInput.max);
+
+            if (maxQty && qty > maxQty) {
+                alert(`Only ${maxQty} items available in stock.`);
+                return;
+            }
 
             if (qty <= 0) return alert("Quantity must be greater than 0.");
 
