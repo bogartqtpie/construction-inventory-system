@@ -20,28 +20,22 @@ app = Flask(
     static_folder="templates/static",
     static_url_path="/static",
 )
-app.secret_key = os.environ.get("SECRET_KEY", "fallback_secret")
 
+app.secret_key = os.environ.get("SECRET_KEY", "fallback_secret")
 
 database_url = os.getenv("DATABASE_URL")
 local_db_filename = os.getenv("LOCAL_DB_FILENAME", "inventory.db")
 local_db_path = os.path.join(instance_path, local_db_filename)
-render_service = os.getenv("RENDER") == "true"
 
 if database_url:
-    # Fix for Render PostgreSQL
     if database_url.startswith("postgres://"):
         database_url = database_url.replace("postgres://", "postgresql://", 1)
 
     app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 else:
-    if render_service:
-        raise RuntimeError(
-            "DATABASE_URL is required on Render. "
-            "Use a persistent Render Postgres database instead of SQLite."
-        )
-    # Keep local development on a stable file inside instance/.
+    # SAFE fallback for local only
     app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///" + local_db_path
+
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
@@ -955,4 +949,5 @@ with app.app_context():
 # RUN APP
 # ------------------------------
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
