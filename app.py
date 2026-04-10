@@ -334,28 +334,25 @@ def _save_material_from_form(material, is_new):
         p = _parse_float(prices[i] if i < len(prices) else 0, 0.0)
         variant_rows.append((name, q, u, p))
 
-    if variant_rows:
-        material.quantity = 0.0
+    existing_variants = {v.name: v for v in material.variants}
 
-        existing_variants = {v.name: v for v in material.variants}
-
-        for name, q, u, p in variant_rows:
-            if name in existing_variants:
-                v = existing_variants[name]
-                v.quantity = q
-                v.unit = u
-                v.price = p
-        else:
-            db.session.add(
-                MaterialVariant(
-                    material_id=material.id,
-                    name=name,
-                    quantity=q,
-                    unit=u,
-                    price=p,
-                )
-            )
+    for name, q, u, p in variant_rows:
+        if name in existing_variants:
+            v = existing_variants[name]
+            v.quantity = q
+            v.unit = u
+            v.price = p
     else:
+        db.session.add(
+            MaterialVariant(
+                material_id=material.id,
+                name=name,
+                quantity=q,
+                unit=u,
+                price=p,
+            )
+        )
+    if not variant_rows:
         material.quantity = _parse_float(request.form.get("quantity"), 0.0)
 
 
