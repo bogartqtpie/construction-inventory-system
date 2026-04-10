@@ -1,4 +1,5 @@
 import csv
+from tkinter.font import names
 from flask import Response
 from io import StringIO
 import os
@@ -304,14 +305,6 @@ def inventory_json_payload():
 
 
 def _save_material_from_form(material, is_new):
-    material.name = request.form["name"].strip()
-    material.category = request.form.get("category", "").strip()
-    material.unit = request.form.get("unit", "pcs").strip() or "pcs"
-    material.price_per_unit = _parse_float(
-        request.form.get("price_per_unit"), 0.0)
-    material.reorder_point = _parse_float(
-        request.form.get("reorder_point"), 0.0)
-    material.supplier_id = _parse_int_optional(request.form.get("supplier_id"))
 
     names = request.form.getlist("variant_name[]")
     qtys = request.form.getlist("variant_quantity[]")
@@ -323,30 +316,35 @@ def _save_material_from_form(material, is_new):
         name = (name or "").strip()
         if not name:
             continue
+
         q = _parse_float(qtys[i] if i < len(qtys) else 0, 0.0)
         u = (units[i] if i < len(units) else "pcs") or "pcs"
         p = _parse_float(prices[i] if i < len(prices) else 0, 0.0)
+
         variant_rows.append((name, q, u, p))
 
     existing_variants = {v.name: v for v in material.variants}
 
-    for name, q, u, p in variant_rows:
-        if name in existing_variants:
-            v = existing_variants[name]
-            v.quantity = q
-            v.unit = u
-            v.price = p
+    if variant_rows:
+        material.quantity = 0.0  # disable main stock if variants exist
+
+        for name, q, u, p in variant_rows:
+            if name in existing_variants:
+                v = existing_variants[name]
+                v.quantity = q
+                v.unit = u
+                v.price = p
+            else:
+                db.session.add(
+                    MaterialVariant(
+                        material_id=material.id,
+                        name=name,
+                        quantity=q,
+                        unit=u,
+                        price=p,
+                    )
+                )
     else:
-        db.session.add(
-            MaterialVariant(
-                material_id=material.id,
-                name=name,
-                quantity=q,
-                unit=u,
-                price=p,
-            )
-        )
-    if not variant_rows:
         material.quantity = _parse_float(request.form.get("quantity"), 0.0)
 
 
