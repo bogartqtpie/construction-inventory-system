@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card shadow-sm" style="border-radius: 15px; overflow: hidden;">
+
+    <!-- HEADER -->
+    <div class="card-header d-flex justify-content-between align-items-center"
+        style="background: linear-gradient(135deg, #667eea, #764ba2); color: white;">
+        <h5 class="mb-0"><i class="bi bi-box2-check"></i> Inventory</h5>
+        <a href="{{ url_for('add_material') }}" class="btn btn-light btn-sm">
+            <i class="bi bi-plus"></i> Add Material
+        </a>
+    </div>
+
+    <div class="card-body p-4">
+
+        <!-- ✅ WEATHER WARNING -->
+        {% if warning %}
+        <div class="alert alert-warning mb-3">
+            {{ warning }}
+        </div>
+        {% endif %}
+
+        <!-- ✅ PREDICTION -->
+        {% if predictions %}
+        <div class="card mb-3 p-3">
+            <h6>Demand Forecast (Next 7 Days)</h6>
+            <ul>
+                {% for p in predictions %}
+                <li>{{ p.date }} → {{ p.prediction|round(2) }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+
+        <style>
+            .inventory-container {
+                display: flex;
+                gap: 25px;
+            }
+
+            .inventory-sidebar {
+                width: 250px;
+                background: #f8f9fa;
+                padding: 20px;
+                border-radius: 10px;
+            }
+
+            .inventory-grid {
+                flex: 1;
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+                gap: 20px;
+            }
+
+            .product-card {
+                background: white;
+                border-radius: 12px;
+                overflow: hidden;
+                position: relative;
+                transition: 0.3s;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            }
+
+            .product-card:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+            }
+
+            .product-img {
+                height: 110px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 40px;
+                background: #eef2ff;
+                color: #667eea;
+            }
+
+            .product-content {
+                padding: 12px;
+                text-align: center;
+            }
+
+            .product-name {
+                font-weight: 600;
+                font-size: 14px;
+            }
+
+            .product-qty {
+                margin-top: 8px;
+                font-size: 13px;
+            }
+
+            /* HOVER ACTIONS */
+            .product-actions {
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 110px;
+                background: rgba(0, 0, 0, 0.65);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                gap: 8px;
+                opacity: 0;
+                transition: 0.25s;
+            }
+
+            .product-card:hover .product-actions {
+                opacity: 1;
+            }
+
+            .product-actions a,
+            .product-actions button {
+                font-size: 12px;
+                padding: 6px 10px;
+            }
+        </style>
+
+        <div class="inventory-container">
+
+            <!-- SIDEBAR -->
+            <div class="inventory-sidebar">
+                <h6>Search</h6>
+                <input type="text" id="searchInput" class="form-control mb-3" placeholder="Search material...">
+
+                <h6>Category</h6>
+                {% for cat in ["Bits & Disc", "Hand Tools", "Concreting & Masonry",
+                "Nail, Tox, & Screws", "Wood Products",
+                "Rebars & G.I Wires", "Drywall & Ceiling"] %}
+                <label>
+                    <input type="checkbox" class="category-filter" value="{{ cat }}"> {{ cat }}
+                </label><br>
+                {% endfor %}
+            </div>
+
+            <!-- GRID -->
+            <div class="inventory-grid">
+
+                {% for m in materials %}
+
+                {% set any_low_stock = false %}
+                {% if m.variants %}
+                {% for v in m.variants %}
+                {% if v.quantity <= m.reorder_point %} {% set any_low_stock=true %} {% endif %} {% endfor %} {% else %}
+                    {% if m.quantity <=m.reorder_point %} {% set any_low_stock=true %} {% endif %} {% endif %} <div
+                    class="product-card" data-name="{{ m.name|lower }}" data-category="{{ m.category|trim }}">
+
+                    <div class="product-img">
+                        <i class="bi bi-box-seam"></i>
+                    </div>
+
+                    <div class="product-content">
+                        <div class="product-name">{{ m.name }}</div>
+
+                        <div class="product-qty">
+                            {% if m.variants %}
+                            <span class="badge {% if any_low_stock %}bg-danger{% else %}bg-success{% endif %}">
+                                {% if any_low_stock %}Low Stock{% else %}In Stock{% endif %}
+                            </span><br>
+
+                            <button class="btn btn-sm btn-outline-primary mt-1 view-variants-btn" data-id="{{ m.id }}"
+                                data-name="{{ m.name }}">
+                                View Variants
+                            </button>
+                            {% else %}
+                            Qty: {{ m.quantity }} {{ m.unit }}<br>
+                            <span class="badge {% if any_low_stock %}bg-danger{% else %}bg-success{% endif %}">
+                                {% if any_low_stock %}Low Stock{% else %}In Stock{% endif %}
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- HOVER ACTIONS -->
+                    <div class="product-actions">
+                        <a href="{{ url_for('reorder', material_id=m.id) }}" class="btn btn-light btn-sm">Order</a>
+                        <a href="{{ url_for('edit_material', id=m.id) }}" class="btn btn-primary btn-sm">Edit</a>
+                        <form method="POST" action="{{ url_for('delete_material', id=m.id) }}">
+                            <button class="btn btn-danger btn-sm">Delete</button>
+                        </form>
+                    </div>
+
+                    <!-- HIDDEN VARIANTS -->
+                    <div id="variants{{ m.id }}" class="d-none">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Qty</th>
+                                    <th>Unit</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for v in m.variants %}
+                                <tr>
+                                    <td>{{ v.name }}</td>
+                                    <td>{{ v.quantity }}</td>
+                                    <td>{{ v.unit }}</td>
+                                    <td>
+                                        {% if v.quantity <= m.reorder_point %} <span class="badge bg-danger">Low</span>
+                                            {% else %}
+                                            <span class="badge bg-success">OK</span>
+                                            {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+            </div>
+            {% endfor %}
+
+        </div>
+    </div>
+</div>
+</div>
+
+<!-- MODAL -->
+<div class="modal fade" id="variantsModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 id="modalTitle"></h5>
+                <button class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ✅ FIXED SCRIPT -->
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+
+        const modal = new bootstrap.Modal(document.getElementById('variantsModal'));
+
+        // ✅ WORKING VARIANTS CLICK
+        document.body.addEventListener("click", function (e) {
+            if (e.target.closest(".view-variants-btn")) {
+
+                let btn = e.target.closest(".view-variants-btn");
+
+                let id = btn.dataset.id;
+                let name = btn.dataset.name;
+
+                let variants = document.getElementById("variants" + id);
+
+                if (!variants) return;
+
+                document.getElementById("modalTitle").innerText = "Variants of " + name;
+                document.getElementById("modalBody").innerHTML = variants.innerHTML;
+
+                modal.show();
+            }
+        });
+
+        function filterInventory() {
+            let search = document.getElementById("searchInput").value.toLowerCase();
+
+            let selected = Array.from(document.querySelectorAll(".category-filter:checked"))
+                .map(cb => cb.value.trim());
+
+            document.querySelectorAll(".product-card").forEach(card => {
+                let name = card.dataset.name;
+                let category = card.dataset.category;
+
+                let match1 = name.includes(search);
+                let match2 = selected.length === 0 || selected.includes(category);
+
+                card.style.display = (match1 && match2) ? "block" : "none";
+            });
+        }
+
+        document.getElementById("searchInput").addEventListener("keyup", filterInventory);
+
+        document.querySelectorAll(".category-filter").forEach(cb => {
+            cb.addEventListener("change", filterInventory);
+        });
+
+    });
+</script>
+
+{% endblock %}

@@ -1,0 +1,1211 @@
+﻿{% extends "base.html" %}
+{% block content %}
+<style>
+    .page-shell {
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 0 0 2rem;
+    }
+
+    .section-block {
+        margin-top: 1.5rem;
+    }
+
+    .weather-panel {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.92) 0%, rgba(118, 75, 162, 0.92) 100%);
+        color: white;
+        border-radius: 14px;
+        padding: 16px 18px;
+        box-shadow: 0 10px 26px rgba(34, 34, 80, 0.16);
+    }
+
+    .weather-panel h6 {
+        font-weight: 700;
+        margin-bottom: 8px;
+    }
+
+    .weather-panel ul {
+        margin-bottom: 0;
+        padding-left: 1.1rem;
+    }
+
+    .weather-news-card {
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.92) 0%, rgba(118, 75, 162, 0.92) 100%);
+        color: white;
+        border-radius: 14px;
+        box-shadow: 0 10px 26px rgba(34, 34, 80, 0.16);
+    }
+
+    .weather-days-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(115px, 1fr));
+        gap: 10px;
+    }
+
+    .weather-day {
+        background: rgba(255, 255, 255, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 10px;
+        padding: 10px 8px;
+        text-align: center;
+    }
+
+    .weather-icon {
+        font-size: 1.3rem;
+        margin: 6px 0;
+        display: block;
+    }
+
+    .weather-label {
+        font-size: 0.82rem;
+        opacity: 0.95;
+    }
+
+    .weather-temp {
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+
+    #cart-table th,
+    #cart-table td,
+    #inventory-table th,
+    #inventory-table td {
+        padding: 0.72rem 0.7rem;
+    }
+
+    .modern-card {
+        border: none;
+        border-radius: 12px;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    }
+
+    .modern-card:hover {
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+    }
+
+    .modern-header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 12px 12px 0 0;
+    }
+
+    .modern-header.dark {
+        background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+    }
+
+    .modern-header.warning {
+        background: linear-gradient(135deg, #f5a623 0%, #f7b731 100%);
+    }
+
+    .badge {
+        font-weight: 600;
+        padding: 0.5rem 0.75rem;
+        border-radius: 6px;
+    }
+
+    .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        transition: transform 0.2s ease;
+    }
+
+    .form-control,
+    .form-select {
+        border-radius: 8px;
+        border: 1.5px solid #e0e0e0;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .form-control:focus,
+    .form-select:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+    }
+
+    .card-header {
+        border: none;
+        font-weight: 600;
+        letter-spacing: 0.5px;
+        color: white !important;
+    }
+
+    .card-header h1,
+    .card-header h2,
+    .card-header h3,
+    .card-header h4,
+    .card-header h5,
+    .card-header h6 {
+        color: white !important;
+    }
+
+    .tips-card {
+        background: linear-gradient(135deg, rgba(245, 166, 35, 0.1) 0%, rgba(247, 183, 49, 0.1) 100%);
+        border-left: 4px solid #f5a623;
+    }
+
+    .material-search-container {
+        position: relative;
+    }
+
+    .material-dropdown {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: white;
+        border: 1.5px solid #667eea;
+        border-top: none;
+        border-radius: 0 0 8px 8px;
+        max-height: 250px;
+        overflow-y: auto;
+        z-index: 1000;
+        display: none;
+    }
+
+    .material-dropdown.show {
+        display: block;
+    }
+
+    .material-option {
+        padding: 12px 15px;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #f0f0f0;
+        transition: background-color 0.15s ease;
+    }
+
+    .material-option:hover {
+        background-color: rgba(102, 126, 234, 0.1);
+    }
+
+    .material-option.active {
+        background-color: rgba(102, 126, 234, 0.15);
+        font-weight: 600;
+    }
+
+    .material-option .quantity-badge {
+        font-size: 12px;
+        background: #e9ecef;
+        padding: 2px 8px;
+        border-radius: 4px;
+        color: #666;
+    }
+
+    .material-option .quantity-badge.low {
+        background: #f8d7da;
+        color: #721c24;
+    }
+
+    .material-search-input {
+        width: 100%;
+        padding: 10px 15px;
+        border: 1.5px solid #e0e0e0;
+        border-radius: 8px;
+        font-size: 14px;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .material-search-input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+    }
+
+    .material-selected {
+        padding: 10px 15px;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);
+        border-radius: 8px;
+        border: 1.5px solid #667eea;
+        font-weight: 500;
+        color: #667eea;
+    }
+
+    .no-results {
+        padding: 15px;
+        text-align: center;
+        color: #999;
+        font-size: 14px;
+    }
+
+    .variant-selector {
+        margin-top: 15px;
+        padding: 15px;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
+        border-radius: 8px;
+        display: none;
+    }
+
+    .variant-selector.show {
+        display: block;
+    }
+
+    .variant-option {
+        display: flex;
+        align-items: center;
+        padding: 10px;
+        margin-bottom: 8px;
+        background: white;
+        border: 2px solid #e0e0e0;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .variant-option input[type="radio"] {
+        margin-right: 10px;
+        cursor: pointer;
+    }
+
+    .variant-option.selected {
+        border-color: #667eea;
+        background: rgba(102, 126, 234, 0.1);
+        font-weight: 500;
+    }
+
+    .variant-info {
+        flex: 1;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .variant-price {
+        font-weight: 600;
+        color: #667eea;
+    }
+
+    .inventory-expand-btn {
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+        color: #667eea;
+        font-size: 14px;
+        transition: transform 0.2s ease;
+    }
+
+    .inventory-expand-btn.expanded {
+        transform: rotate(180deg);
+    }
+
+    .inventory-variants-row {
+        display: none;
+    }
+
+    .inventory-variants-row.show {
+        display: table-row;
+    }
+
+    .inventory-variants-content {
+        padding: 12px 15px;
+        background: rgba(102, 126, 234, 0.05);
+    }
+
+    .variant-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(102, 126, 234, 0.1);
+        font-size: 13px;
+    }
+
+    .variant-item:last-child {
+        border-bottom: none;
+    }
+
+    .variant-item-name {
+        flex: 1;
+        color: #333;
+    }
+
+    .variant-item-qty {
+        margin: 0 10px;
+        text-align: right;
+        min-width: 50px;
+        color: #667eea;
+        font-weight: 500;
+    }
+
+    .category-badge {
+        display: inline-block;
+        font-size: 11px;
+        background: rgba(102, 126, 234, 0.15);
+        color: #667eea;
+        padding: 2px 6px;
+        border-radius: 4px;
+        margin-right: 5px;
+    }
+
+    .category-filter-section {
+        margin-bottom: 20px;
+    }
+
+    .category-filter-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #2c3e50;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 10px;
+        display: block;
+    }
+
+    .category-filter-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    #category-filter-group {
+        line-height: 1.8;
+    }
+
+    .category-checkbox-wrapper {
+        display: flex;
+        align-items: center;
+    }
+
+    .category-checkbox {
+        appearance: none;
+        -webkit-appearance: none;
+        -moz-appearance: none;
+        width: 18px;
+        height: 18px;
+        border: 2px solid #e0e0e0;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        background: white;
+        margin: 0;
+        margin-right: 6px;
+    }
+
+    .category-checkbox:hover {
+        border-color: #667eea;
+        background-color: rgba(102, 126, 234, 0.05);
+    }
+
+    .category-checkbox:checked {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-color: #667eea;
+    }
+
+    .category-checkbox:checked::after {
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+    }
+
+    .category-checkbox-label {
+        font-size: 13px;
+        color: #333;
+        cursor: pointer;
+        user-select: none;
+        font-weight: 500;
+    }
+
+    .category-clear-btn {
+        background: none;
+        border: none;
+        color: #667eea;
+        font-size: 12px;
+        cursor: pointer;
+        text-decoration: underline;
+        padding: 0;
+        transition: color 0.2s ease;
+    }
+
+    .category-clear-btn:hover {
+        color: #764ba2;
+    }
+
+    .inventory-row.hidden {
+        display: none;
+    }
+
+    .inventory-variants-row.hidden {
+        display: none;
+    }
+
+    .inventory-search-container {
+        margin-bottom: 15px;
+    }
+
+    .inventory-search-input {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1.5px solid #e0e0e0;
+        border-radius: 6px;
+        font-size: 13px;
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .inventory-search-input:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
+    }
+
+    .inventory-scroll-container {
+        max-height: 280px;
+        overflow-y: auto;
+        overflow-x: hidden;
+        border-radius: 6px;
+    }
+
+    .inventory-scroll-container::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    .inventory-scroll-container::-webkit-scrollbar-track {
+        background: rgba(102, 126, 234, 0.05);
+        border-radius: 3px;
+    }
+
+    .inventory-scroll-container::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border-radius: 3px;
+    }
+
+    .inventory-scroll-container::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+    }
+
+    .inventory-no-results {
+        padding: 20px;
+        text-align: center;
+        color: #999;
+        font-size: 13px;
+    }
+
+    @media (max-width: 992px) {
+        .page-shell {
+            padding: 0.5rem 0 1.2rem;
+        }
+
+        .inventory-scroll-container {
+            max-height: 350px;
+        }
+    }
+</style>
+
+<div class="page-shell">
+
+    <div class="row g-4 section-block">
+        <!-- POS / Cart Section - FULL WIDTH -->
+        <div class="col-12">
+            <div class="card modern-card shadow-sm">
+                <div class="card-header"
+                    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; padding: 20px 30px;">
+                    <h5 class="mb-0" style="font-weight: 700; font-size: 24px; letter-spacing: 0.5px; color: white;">
+                        <i class="bi bi-cart-plus" style="margin-right: 10px;"></i> Point of Sale (Cashier)
+                    </h5>
+                </div>
+                <div class="card-body p-4">
+                    <form class="mb-3">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Material</label>
+                            <div class="material-search-container">
+                                <input type="text" id="material-search" class="material-search-input"
+                                    placeholder="Search or select material...">
+                                <div class="material-dropdown" id="material-dropdown">
+                                    {% for m in materials %}
+                                    {% set variants_json = '[]' %}
+                                    {% if m.variants %}
+                                    {% set variants_list = [] %}
+                                    {% for v in m.variants %}
+                                    {% set _ = variants_list.append({'id': v.id, 'name': v.name, 'quantity': v.quantity,
+                                    'unit': v.unit, 'price': v.price}) %}
+                                    {% endfor %}
+                                    {% set variants_json = variants_list|tojson %}
+                                    {% endif %}
+                                    <div class="material-option" data-id="{{ m.id }}" data-unit="{{ m.unit }}"
+                                        data-price="{{ m.price_per_unit }}" data-name="{{ m.name }}"
+                                        data-variants='{{ variants_json }}'>
+                                        <div>
+                                            <div style="font-weight: 500;">{{ m.name }}</div>
+                                            <div style="font-size: 12px; color: #999;">{{ m.category }} {{ m.unit }}
+                                            </div>
+                                        </div>
+                                        {% if m.variants %}
+                                        {% set total_qty = m.variants|map(attribute='quantity')|sum %}
+                                        <span
+                                            class="quantity-badge {% if total_qty <= m.reorder_point %}low{% endif %}">
+                                            {{ total_qty }} {{ m.unit }}
+                                        </span>
+                                        {% else %}
+                                        <span
+                                            class="quantity-badge {% if m.quantity <= m.reorder_point %}low{% endif %}">
+                                            {{ m.quantity }} {{ m.unit }}
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div class="material-selected" id="material-selected"
+                                style="margin-top: 10px; display: none;">
+                                <i class="bi bi-check-circle"></i> <span id="selected-name"></span>
+                            </div>
+
+                            <!-- Variant Selector -->
+                            <div class="variant-selector" id="variant-selector">
+                                <label class="form-label fw-semibold mb-3"><i class="bi bi-diagram-3"></i> Select
+                                    Variant</label>
+                                <div id="variant-options-container"></div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="qty" class="form-label fw-semibold">Quantity</label>
+                                <input id="qty" type="number" class="form-control" min="1" value="1">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="price" class="form-label fw-semibold">Price per Unit (₱)</label>
+                                <input id="price" type="number" step="0.01" class="form-control" value="0">
+                            </div>
+                        </div>
+
+                        <button id="add-to-cart" type="button" class="btn btn-primary w-100">
+                            <i class="bi bi-bag-plus"></i> Add to Cart
+                        </button>
+                    </form>
+
+                    <hr class="my-4">
+
+                    <h6 class="fw-bold mb-3"><i class="bi bi-basket"></i> Cart</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle" id="cart-table">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Material</th>
+                                    <th>Qty</th>
+                                    <th>Price</th>
+                                    <th>Subtotal</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="cart-body"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mt-3 p-3 rounded"
+                        style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.05) 0%, rgba(118, 75, 162, 0.05) 100%);">
+                        <h5 class="mb-0 fw-bold">Total: ₱<span id="total">0.00</span></h5>
+                        <button id="checkout" class="btn btn-success">
+                            <i class="bi bi-cash-coin"></i> Checkout
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% if warning %}
+    <div class="row g-4 section-block">
+        <div class="col-12">
+            <div class="card weather-news-card border-0">
+                <div class="card-body p-4">
+                    <h5 class="mb-0"><i class="bi bi-cloud-drizzle"></i> Weather Update</h5>
+                    <p class="mb-0 mt-2">{{ warning }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% elif weather_days %}
+    <div class="row g-4 section-block">
+        <div class="col-12">
+            <div class="card weather-news-card border-0">
+                <div class="card-body p-4">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+                        <h5 class="mb-0"><i class="bi bi-broadcast"></i> Weather Report</h5>
+                        <div class="fw-semibold">{{ weather_days[0].date_label }} - {{ weather_days[-1].date_label }}
+                        </div>
+                    </div>
+                    <div class="weather-days-grid">
+                        {% for d in weather_days %}
+                        {% set c = d.condition|lower %}
+                        <div class="weather-day">
+                            <div class="fw-semibold">{{ d.day_name }}</div>
+                            <div class="weather-label">{{ d.date_label }}</div>
+                            <span class="weather-icon">
+                                {% if 'rain' in c or 'drizzle' in c or 'thunder' in c %}
+                                <i class="bi bi-cloud-rain-heavy-fill"></i>
+                                {% elif 'cloud' in c or 'mist' in c or 'fog' in c %}
+                                <i class="bi bi-cloud-fill"></i>
+                                {% else %}
+                                <i class="bi bi-sun-fill"></i>
+                                {% endif %}
+                            </span>
+                            <div class="weather-label">{{ d.condition }}</div>
+                            {% if d.min_temp is not none and d.max_temp is not none %}
+                            <div class="weather-temp">{{ d.min_temp }}&deg;C - {{ d.max_temp }}&deg;C</div>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% if advice %}
+                    <div class="mt-3 pt-2" style="border-top: 1px solid rgba(255,255,255,0.25);">
+                        <div class="small fw-semibold mb-1">Inventory Advice</div>
+                        <ul class="mb-0 small">
+                            {% for item in advice %}
+                            <li>{{ item }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!--  Quick Inventory -->
+    <div class="row g-4 section-block">
+        <div class="col-12">
+            <div class="card modern-card shadow-sm">
+                <div class="card-header modern-header dark text-white">
+                    <h5 class="mb-0"><i class="bi bi-box2-check"></i> Quick Inventory</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row">
+                        <!-- Category Filter (Left Column) -->
+                        <div class="col-lg-3">
+                            <label class="category-filter-label"><i class="bi bi-funnel"></i> Filter by Category</label>
+                            <div class="category-filter-group" id="category-filter-group"
+                                style="flex-direction: column; align-items: flex-start; gap: 10px;">
+                                <!-- Categories will be populated by JavaScript -->
+                            </div>
+                            <button class="category-clear-btn mt-2" id="clear-category-filter" style="display: none;">
+                                <i class="bi bi-x-circle"></i> Clear Filters
+                            </button>
+                        </div>
+
+                        <!-- Scrollable Table (Right Column) -->
+                        <div class="col-lg-9">
+                            <!-- Search Bar -->
+                            <div class="inventory-search-container" style="margin-bottom: 10px;">
+                                <input type="text" id="inventory-search" class="inventory-search-input"
+                                    placeholder="Search materials...">
+                            </div>
+
+                            <!-- Scrollable Table -->
+                            <div class="inventory-scroll-container">
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle" id="inventory-table">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th style="width: 40%;">Material</th>
+                                                <th style="width: 20%;">Category</th>
+                                                <th style="width: 20%;">Qty</th>
+                                                <th style="width: 20%;">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for m in materials %}
+                                            <tr class="inventory-row" data-material-id="{{ m.id }}"
+                                                data-category="{{ m.category }}">
+                                                <td>
+                                                    <div style="display: flex; align-items: center;">
+                                                        {% if m.variants %}
+                                                        <button class="inventory-expand-btn" type="button"
+                                                            title="Show variants">
+                                                            <i class="bi bi-chevron-down"></i>
+                                                        </button>
+                                                        {% else %}
+                                                        <span style="width: 24px;"></span>
+                                                        {% endif %}
+                                                        <strong style="font-size: 13px;">{{ m.name }}</strong>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span class="category-badge">{{ m.category }}</span>
+                                                </td>
+                                                <td style="font-size: 13px;">
+                                                    {% if m.variants %}
+                                                    {{ m.variants|map(attribute='quantity')|sum }}
+                                                    {% else %}
+                                                    {{ m.quantity }}
+                                                    {% endif %}
+                                                </td>
+                                                <td>
+                                                    {% set total_qty = m.variants|map(attribute='quantity')|sum if
+                                                    m.variants else m.quantity %}
+                                                    {% if total_qty <= m.reorder_point %} <span class="badge bg-danger"
+                                                        style="font-size: 11px;"><i
+                                                            class="bi bi-exclamation-circle"></i>
+                                                        LOW</span>
+                                                        {% else %}
+                                                        <span class="badge bg-success" style="font-size: 11px;"><i
+                                                                class="bi bi-check-circle"></i> OK</span>
+                                                        {% endif %}
+                                                </td>
+                                            </tr>
+                                            {% if m.variants %}
+                                            <tr class="inventory-variants-row" data-variants-for="{{ m.id }}"
+                                                data-category="{{ m.category }}">
+                                                <td colspan="4">
+                                                    <div class="inventory-variants-content">
+                                                        {% for v in m.variants %}
+                                                        <div class="variant-item">
+                                                            <span class="variant-item-name"> {{ v.name }}</span>
+                                                            <span class="variant-item-qty">{{ v.quantity }} {{ v.unit
+                                                                }}</span>
+                                                            {% set is_low = v.quantity <= m.reorder_point %} <span
+                                                                class="badge" style="font-size: 10px;"
+                                                                :class="is_low ? 'bg-warning' : 'bg-info'">
+                                                                {{ 'LOW' if is_low else 'OK' }}
+                                                                </span>
+                                                        </div>
+                                                        {% endfor %}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {% endif %}
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tips at the Bottom - FULL WIDTH -->
+    <div class="row g-4 section-block">
+        <div class="col-12">
+            <div class="card modern-card shadow-sm tips-card border-0">
+                <div class="card-header modern-header warning text-white">
+                    <h5 class="mb-0" style="color: white;"><i class="bi bi-lightbulb"></i> Tips & Guidelines</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row">
+                        <div class="col-md-6 mb-3 mb-md-0">
+                            <p class="mb-0">
+                                <i class="bi bi-check-circle-fill text-success me-2"></i>
+                                Use the cart to add multiple items and click <strong>Checkout</strong>
+                                to record sales and automatically deduct stock.
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <p class="mb-0">
+                                <i class="bi bi-bell-fill text-warning me-2"></i>
+                                Low-stock items will appear in <strong>Notifications</strong>.
+                                Check the Quick Inventory section for real-time stock status.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- Checkout Success Modal -->
+<div class="modal fade" id="checkoutSuccessModal" tabindex="-1" aria-labelledby="checkoutSuccessModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-success">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="checkoutSuccessModalLabel">
+                    <i class="bi bi-check-circle-fill"></i> Checkout Successful
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-0">Your checkout has been completed successfully.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-success" data-bs-dismiss="modal">OK</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- POS Script -->
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const materialSearch = document.getElementById("material-search");
+        const materialDropdown = document.getElementById("material-dropdown");
+        const materialSelected = document.getElementById("material-selected");
+        const selectedName = document.getElementById("selected-name");
+        const variantSelector = document.getElementById("variant-selector");
+        const variantOptionsContainer = document.getElementById("variant-options-container");
+        const priceInput = document.getElementById("price");
+        const qtyInput = document.getElementById("qty");
+        const cartBody = document.getElementById("cart-body");
+        const totalSpan = document.getElementById("total");
+        const cart = [];
+        let selectedMaterialId = null;
+        let selectedVariantId = null;
+
+        // Initialize category filters in Quick Inventory
+        initializeCategoryFilters();
+
+        // Show dropdown on focus
+        materialSearch.addEventListener("focus", () => {
+            materialDropdown.classList.add("show");
+        });
+
+        // Hide dropdown when clicking outside
+        document.addEventListener("click", (e) => {
+            if (!materialSearch.contains(e.target) && !materialDropdown.contains(e.target)) {
+                materialDropdown.classList.remove("show");
+            }
+        });
+
+        // Search functionality
+        materialSearch.addEventListener("input", (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            const options = document.querySelectorAll(".material-option");
+            let hasResults = false;
+
+            options.forEach(option => {
+                const name = option.dataset.name.toLowerCase();
+                const category = option.querySelector("div:nth-child(2)") ? option.querySelector("div:nth-child(2)").textContent.toLowerCase() : "";
+
+                if (name.includes(searchTerm) || category.includes(searchTerm)) {
+                    option.style.display = "flex";
+                    hasResults = true;
+                } else {
+                    option.style.display = "none";
+                }
+            });
+
+            // Show no results message
+            if (!hasResults && searchTerm.length > 0) {
+                if (!document.querySelector(".no-results")) {
+                    materialDropdown.insertAdjacentHTML("beforeend", "<div class=\"no-results\">No materials found</div>");
+                }
+            } else {
+                const noResults = document.querySelector(".no-results");
+                if (noResults) noResults.remove();
+            }
+
+            materialDropdown.classList.add("show");
+        });
+
+        // Material option click
+        document.querySelectorAll(".material-option").forEach(option => {
+            option.addEventListener("click", () => {
+                selectedMaterialId = option.dataset.id;
+                const name = option.dataset.name;
+                const unit = option.dataset.unit;
+                const price = option.dataset.price;
+                const variantsJson = option.dataset.variants;
+
+                materialSearch.value = name;
+                priceInput.value = price;
+                selectedName.textContent = `${name} selected`;
+                const availableQty = selectedOption.querySelector(".quantity-badge")?.textContent || "";
+                const maxQty = parseInt(availableQty);
+                if (!isNaN(maxQty)) {
+                qtyInput.max = maxQty;
+                }
+
+                materialSelected.style.display = "block";
+                materialDropdown.classList.remove("show");
+                selectedVariantId = null;
+
+                // Handle variants
+                if (variantsJson && variantsJson.length > 0) {
+                    const variants = JSON.parse(variantsJson);
+                    displayVariants(variants);
+                } else {
+                    variantSelector.classList.remove("show");
+                }
+
+                // Highlight selected option
+                document.querySelectorAll(".material-option").forEach(opt => {
+                    opt.classList.remove("active");
+                });
+                option.classList.add("active");
+            });
+        });
+
+        // Initialize category filters
+        function initializeCategoryFilters() {
+            const categories = new Set();
+            document.querySelectorAll(".inventory-row").forEach(row => {
+                const category = row.dataset.category;
+                if (category) categories.add(category);
+            });
+
+            const filterGroup = document.getElementById("category-filter-group");
+            const sortedCategories = Array.from(categories).sort();
+
+            sortedCategories.forEach(category => {
+                const wrapper = document.createElement("div");
+                wrapper.className = "category-checkbox-wrapper";
+                wrapper.innerHTML = `
+                    <input type="checkbox" class="category-checkbox category-filter-checkbox" value="${category}" id="cat-${category}">
+                    <label for="cat-${category}" class="category-checkbox-label">${category}</label>
+                `;
+                filterGroup.appendChild(wrapper);
+            });
+
+            // Add event listeners to checkboxes
+            document.querySelectorAll(".category-filter-checkbox").forEach(checkbox => {
+                checkbox.addEventListener("change", filterByCategory);
+            });
+        }
+
+        function filterByCategory() {
+            const selectedCategories = Array.from(document.querySelectorAll(".category-filter-checkbox:checked"))
+                .map(cb => cb.value);
+            const clearBtn = document.getElementById("clear-category-filter");
+
+            clearBtn.style.display = selectedCategories.length > 0 ? "block" : "none";
+
+            document.querySelectorAll(".inventory-row").forEach(row => {
+                const category = row.dataset.category;
+                const shouldShow = selectedCategories.length === 0 || selectedCategories.includes(category);
+                row.classList.toggle("hidden", !shouldShow);
+
+                // Also toggle corresponding variants row
+                const materialId = row.dataset.materialId;
+                const variantsRow = document.querySelector(`.inventory-variants-row[data-variants-for="${materialId}"]`);
+                if (variantsRow) {
+                    variantsRow.classList.toggle("hidden", !shouldShow);
+                }
+            });
+        }
+
+        document.getElementById("clear-category-filter").addEventListener("click", () => {
+            document.querySelectorAll(".category-filter-checkbox").forEach(cb => cb.checked = false);
+            filterByCategory();
+        });
+
+        // Inventory Search Functionality
+        const inventorySearch = document.getElementById("inventory-search");
+        inventorySearch.addEventListener("input", (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            const rows = document.querySelectorAll(".inventory-row");
+            let hasVisibleResults = false;
+
+            rows.forEach(row => {
+                // Skip if row is already hidden by category filter
+                if (row.classList.contains("hidden")) {
+                    return;
+                }
+
+                const materialName = row.querySelector("strong")?.textContent.toLowerCase() || "";
+                const materialCategory = row.dataset.category?.toLowerCase() || "";
+
+                const matches = materialName.includes(searchTerm) ||
+                    materialCategory.includes(searchTerm) ||
+                    searchTerm === "";
+
+                if (matches) {
+                    row.classList.remove("hidden");
+                    hasVisibleResults = true;
+
+                    // Also show corresponding variants row if exists
+                    const materialId = row.dataset.materialId;
+                    const variantsRow = document.querySelector(`.inventory-variants-row[data-variants-for="${materialId}"]`);
+                    if (variantsRow) {
+                        variantsRow.classList.remove("hidden");
+                    }
+                } else {
+                    row.classList.add("hidden");
+
+                    // Also hide corresponding variants row
+                    const materialId = row.dataset.materialId;
+                    const variantsRow = document.querySelector(`.inventory-variants-row[data-variants-for="${materialId}"]`);
+                    if (variantsRow) {
+                        variantsRow.classList.add("hidden");
+                    }
+                }
+            });
+        });
+
+        // Quick Inventory expansion toggle
+        document.querySelectorAll(".inventory-expand-btn").forEach(btn => {
+            btn.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const row = btn.closest(".inventory-row");
+                const materialId = row.dataset.materialId;
+                const variantsRow = document.querySelector(`tr.inventory-variants-row[data-variants-for="${materialId}"]`);
+
+                if (variantsRow) {
+                    variantsRow.classList.toggle("show");
+                    btn.classList.toggle("expanded");
+                }
+            });
+        });
+
+        // Display variant options
+        function displayVariants(variants) {
+            variantOptionsContainer.innerHTML = "";
+            variants.forEach((variant, index) => {
+                const variantHtml = `
+                    <label class="variant-option">
+                        <input type="radio" name="variant" value="${variant.id}" data-name="${variant.name}" data-price="${variant.price}">
+                        <div class="variant-info">
+                            <span>${variant.name} ${variant.quantity} ${variant.unit}</span>
+                            <span class="variant-price">₱
+${parseFloat(variant.price).toFixed(2)}</span>
+                        </div>
+                    </label>
+                `;
+                variantOptionsContainer.insertAdjacentHTML("beforeend", variantHtml);
+            });
+
+            // Add variant selection handlers
+            variantOptionsContainer.querySelectorAll("input[type='radio']").forEach(radio => {
+                radio.addEventListener("change", (e) => {
+                    selectedVariantId = e.target.value;
+                    const selectedPrice = e.target.dataset.price;
+                    priceInput.value = selectedPrice;
+
+                    // Visual feedback
+                    variantOptionsContainer.querySelectorAll(".variant-option").forEach(opt => {
+                        opt.classList.remove("selected");
+                    });
+                    e.target.closest(".variant-option").classList.add("selected");
+                });
+            });
+
+            variantSelector.classList.add("show");
+        }
+
+        // Add to cart
+        document.getElementById("add-to-cart").addEventListener("click", () => {
+            if (!selectedMaterialId) return alert("Please select a material.");
+
+            const price = parseFloat(priceInput.value);
+            const qty = parseInt(qtyInput.value);
+            const maxQty = parseInt(qtyInput.max);
+
+            if (maxQty && qty > maxQty) {
+                alert(`Only ${maxQty} items available in stock.`);
+                return;
+            }
+
+            if (qty <= 0) return alert("Quantity must be greater than 0.");
+
+            const selectedOption = document.querySelector(`.material-option[data-id="${selectedMaterialId}"]`);
+            let name = selectedOption.dataset.name;
+
+            // If variant is selected, append variant name
+            if (selectedVariantId) {
+                const variantInput = variantOptionsContainer.querySelector(`input[value="${selectedVariantId}"]`);
+                if (variantInput) {
+                    const variantName = variantInput.dataset.name;
+                    name = `${name} - ${variantName}`;
+                }
+            }
+
+            const subtotal = qty * price;
+            cart.push({ id: selectedMaterialId, variantId: selectedVariantId || null, name, qty, price, subtotal });
+            renderCart();
+
+            // Reset form
+            materialSearch.value = "";
+            materialSelected.style.display = "none";
+            variantSelector.classList.remove("show");
+            priceInput.value = 0;
+            qtyInput.value = 1;
+            selectedMaterialId = null;
+            selectedVariantId = null;
+            document.querySelectorAll(".material-option").forEach(opt => opt.classList.remove("active"));
+        });
+
+        // Render cart
+        function renderCart() {
+            cartBody.innerHTML = "";
+            let total = 0;
+
+            cart.forEach((item, index) => {
+                total += item.subtotal;
+                cartBody.insertAdjacentHTML("beforeend", `
+                    <tr>
+                        <td>${item.name}</td>
+                        <td>${item.qty}</td>
+                        <td>₱${item.price.toFixed(2)}</td>
+                        <td>₱${item.subtotal.toFixed(2)}</td>
+                        <td><button class="btn btn-sm btn-outline-danger remove-item" data-index="${index}">
+                            <i class="bi bi-x"></i>
+                        </button></td>
+                    </tr>
+                `);
+            });
+            totalSpan.textContent = total.toFixed(2);
+        }
+
+        // Remove item
+        cartBody.addEventListener("click", (e) => {
+            if (e.target.closest(".remove-item")) {
+                const index = e.target.closest(".remove-item").dataset.index;
+                cart.splice(index, 1);
+                renderCart();
+            }
+        });
+
+        // Checkout with backend call
+        document.getElementById("checkout").addEventListener("click", async () => {
+            if (!cart.length) return alert("Cart is empty!");
+
+            try {
+                const response = await fetch("/checkout", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ cart })
+                });
+
+                if (!response.ok) throw new Error("Server error: " + response.status);
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Show Bootstrap modal instead of alert
+                    const modal = new bootstrap.Modal(document.getElementById("checkoutSuccessModal"));
+                    modal.show();
+
+                    cart.length = 0;
+                    renderCart();
+                    if (result.updated_inventory) {
+                        updateInventoryTable(result.updated_inventory);
+                    }
+                } else {
+                    alert("Error: " + (result.message || "Unknown error"));
+                }
+            } catch (err) {
+                alert("Checkout failed: " + err.message);
+            }
+        });
+
+        // Update Quick Inventory Table
+        function updateInventoryTable(inventory) {
+            const tbody = document.querySelector("#inventory-table tbody");
+            tbody.innerHTML = "";
+            inventory.forEach(m => {
+                const totalQty = m.variants ? m.variants.reduce((sum, v) => sum + v.quantity, 0) : m.quantity;
+                tbody.insertAdjacentHTML("beforeend", `
+                    <tr>
+                        <td><strong style="font-size: 13px;">${m.name}</strong></td>
+                        <td style="font-size: 13px;">${totalQty}</td>
+                        <td>
+                            ${totalQty <= m.reorder_point
+                        ? '<span class="badge bg-danger" style="font-size: 11px;"><i class="bi bi-exclamation-circle"></i> LOW</span>'
+                        : '<span class="badge bg-success" style="font-size: 11px;"><i class="bi bi-check-circle"></i> OK</span>'}
+                        </td>
+                    </tr>
+                `);
+            });
+        }
+    });
+</script>
+
+{% endblock %}

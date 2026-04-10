@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card shadow-sm" style="border: none; border-radius: 15px; overflow: hidden; margin-bottom: 30px;">
+    <!-- HEADER with Gradient -->
+    <div class="card-header"
+        style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; color: white; padding: 20px 30px; display: flex; justify-content: space-between; align-items: center;">
+        <h5 class="mb-0" style="font-weight: 700; font-size: 24px; letter-spacing: 0.5px; color: white;">
+            <i class="bi bi-cash-stack" style="margin-right: 10px;"></i> Sales Records
+        </h5>
+
+        <div class="d-flex gap-2">
+            <!-- Disabled Export button (prevents BuildError) -->
+            <a href="{{ url_for('export_sales_csv') }}" class="btn"
+                style="background: linear-gradient(135deg, #42d5b3 0%, #2db89b 100%); color: white; border: none; font-weight: 600; padding: 8px 16px; border-radius: 8px;">
+                <i class="bi bi-download"></i> Export CSV
+            </a>
+
+            <form action="{{ url_for('clear_sales') }}" method="POST" style="display: inline;">
+                <button type="submit" class="btn"
+                    style="background: linear-gradient(135deg, #ff6b6b 0%, #ee5a52 100%); color: white; border: none; font-weight: 600; padding: 8px 16px; border-radius: 8px;"
+                    onclick="return confirm('Are you sure you want to clear ALL sales records? This cannot be undone.')">
+                    <i class="bi bi-trash"></i> Clear All
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- BODY -->
+    <div class="card-body"
+        style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.02) 0%, rgba(118, 75, 162, 0.02) 100%); padding: 30px;">
+        {% if sales %}
+        <!-- Table -->
+        <div class="table-responsive" style="border-radius: 12px; overflow: hidden;">
+            <table class="table table-hover align-middle mb-0" style="border-collapse: collapse;">
+                <thead style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                    <tr>
+                        <th scope="col"
+                            style="font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: 0.5px; padding: 16px;">
+                            Sale ID</th>
+                        <th scope="col"
+                            style="font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: 0.5px; padding: 16px;">
+                            Date</th>
+                        <th scope="col" class="text-end"
+                            style="font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: 0.5px; padding: 16px;">
+                            Total (₱)</th>
+                        <th scope="col"
+                            style="font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: 0.5px; padding: 16px;">
+                            Items Sold</th>
+                        <th scope="col" class="text-center"
+                            style="font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: 0.5px; padding: 16px;">
+                            Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for sale in sales %}
+                    <tr style="border-bottom: 1px solid rgba(0, 0, 0, 0.05); transition: all 0.3s ease;">
+                        <td style="padding: 16px; color: #2c3e50; font-weight: 700;"><strong>#{{ sale.id }}</strong>
+                        </td>
+                        <td style="padding: 16px; color: #2c3e50;">{{ sale.date.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+                        <td class="text-end"
+                            style="padding: 16px; background: linear-gradient(135deg, rgba(66, 213, 179, 0.1) 0%, rgba(45, 184, 155, 0.1) 100%); font-weight: 700; color: #42d5b3;">
+                            ₱{{ "%.2f"|format(sale.total) }}</td>
+                        <td style="padding: 16px;">
+                            {% for item in sale.items %}
+                            <span class="badge mb-1"
+                                style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; margin-right: 6px;">
+                                {{ item.material.name }} × {{ item.qty }}
+                            </span>
+                            {% endfor %}
+                        </td>
+                        <td class="text-center" style="padding: 16px;">
+                            <a href="{{ url_for('sale_view', id=sale.id) }}" class="btn"
+                                style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; font-weight: 600; padding: 6px 12px; border-radius: 6px; font-size: 12px; text-decoration: none; transition: all 0.3s ease; box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);"
+                                onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 16px rgba(102, 126, 234, 0.35)'"
+                                onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(102, 126, 234, 0.2)'">
+                                <i class="bi bi-eye"></i> View
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% else %}
+        <!-- Empty state -->
+        <div
+            style="background: rgba(102, 126, 234, 0.05); border: 2px dashed rgba(102, 126, 234, 0.3); border-radius: 12px; padding: 40px; text-align: center; margin-top: 30px;">
+            <i class="bi bi-info-circle"
+                style="font-size: 48px; color: #667eea; margin-bottom: 16px; display: block;"></i>
+            <strong style="color: #2c3e50; font-size: 18px;">No sales recorded yet.</strong>
+            <p style="color: #7f8c8d; margin-top: 10px;">Start by recording your first sale at the POS.</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

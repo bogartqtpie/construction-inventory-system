@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="container mt-4">
+    <h2 class="mb-4" style="color: #2c3e50; font-weight: 700; font-size: 28px;">Order Material</h2>
+
+    <!-- Material Info -->
+    <div class="card mb-4 shadow-sm" style="border-radius: 15px; overflow: hidden;">
+        <div class="card-body"
+            style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 24px;">
+            <h5 class="card-title" style="font-weight: 700; font-size: 22px; margin-bottom: 16px;">{{ material.name }}
+            </h5>
+            <p style="margin-bottom: 10px; font-size: 15px;">
+                <i class="bi bi-box" style="margin-right: 8px;"></i><strong>Current Quantity:</strong> {{
+                material.total_quantity() }} {{ material.unit }}
+            </p>
+            <p style="margin-bottom: 0; font-size: 15px;">
+                <i class="bi bi-exclamation-triangle" style="margin-right: 8px;"></i><strong>Reorder Point:</strong> {{
+                material.reorder_point }} {{ material.unit }}
+            </p>
+        </div>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-danger">
+        <i class="bi bi-exclamation-triangle"></i> {{ error }}
+    </div>
+    {% endif %}
+
+    <!-- Order Form -->
+    <form method="POST" class="card shadow-sm" style="border-radius: 15px; overflow: hidden;">
+        <div class="card-body"
+            style="background: linear-gradient(135deg, rgba(102,126,234,0.02) 0%, rgba(118,75,162,0.02) 100%); padding: 30px;">
+
+            <div class="mb-4">
+                <label for="supplier" class="form-label">Select Supplier</label>
+                <select class="form-select" id="supplier" name="supplier_id" required>
+                    <option value="">-- Choose Supplier --</option>
+                    {% for supplier in suppliers %}
+                    <option value="{{ supplier.id }}">{{ supplier.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="mb-4">
+                <label for="reorder_qty" class="form-label">Order Quantity</label>
+                <input type="number" class="form-control" id="reorder_qty" name="reorder_qty"
+                    placeholder="Enter quantity to order" min="1" required>
+            </div>
+
+            <div class="d-flex justify-content-between gap-3">
+                <a href="{{ url_for('inventory') }}" class="btn btn-secondary">Cancel</a>
+                <button type="submit" class="btn btn-primary">Place Order</button>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
