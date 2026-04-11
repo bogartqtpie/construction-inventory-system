@@ -849,6 +849,9 @@
         const cart = [];
         let selectedMaterialId = null;
         let selectedVariantId = null;
+        let selectedVariantName = null;
+        let currentVariants = [];
+
 
         // Initialize category filters in Quick Inventory
         initializeCategoryFilters();
@@ -908,10 +911,10 @@
                 materialSearch.value = name;
                 priceInput.value = price;
                 selectedName.textContent = `${name} selected`;
-                const availableQty = selectedOption.querySelector(".quantity-badge")?.textContent || "";
+                const availableQty = option.querySelector(".quantity-badge")?.textContent || "";
                 const maxQty = parseInt(availableQty);
                 if (!isNaN(maxQty)) {
-                qtyInput.max = maxQty;
+                    qtyInput.max = maxQty;
                 }
 
                 materialSelected.style.display = "block";
@@ -919,9 +922,16 @@
                 selectedVariantId = null;
 
                 // Handle variants
-                if (variantsJson && variantsJson.length > 0) {
-                    const variants = JSON.parse(variantsJson);
-                    displayVariants(variants);
+
+
+                try {
+                    currentVariants = JSON.parse(variantsJson || "[]");
+                } catch (e) {
+                    variants = [];
+                }
+
+                if (currentVariants.length > 0) {
+                    displayVariants(currentVariants);
                 } else {
                     variantSelector.classList.remove("show");
                 }
@@ -1048,67 +1058,130 @@
         // Display variant options
         function displayVariants(variants) {
             variantOptionsContainer.innerHTML = "";
-            variants.forEach((variant, index) => {
-                const variantHtml = `
-                    <label class="variant-option">
-                        <input type="radio" name="variant" value="${variant.id}" data-name="${variant.name}" data-price="${variant.price}">
-                        <div class="variant-info">
-                            <span>${variant.name} ${variant.quantity} ${variant.unit}</span>
-                            <span class="variant-price">₱
-${parseFloat(variant.price).toFixed(2)}</span>
-                        </div>
-                    </label>
-                `;
-                variantOptionsContainer.insertAdjacentHTML("beforeend", variantHtml);
-            });
 
-            // Add variant selection handlers
-            variantOptionsContainer.querySelectorAll("input[type='radio']").forEach(radio => {
-                radio.addEventListener("change", (e) => {
-                    selectedVariantId = e.target.value;
-                    const selectedPrice = e.target.dataset.price;
-                    priceInput.value = selectedPrice;
-
-                    // Visual feedback
-                    variantOptionsContainer.querySelectorAll(".variant-option").forEach(opt => {
-                        opt.classList.remove("selected");
-                    });
-                    e.target.closest(".variant-option").classList.add("selected");
-                });
-            });
-
-            variantSelector.classList.add("show");
-        }
-
-        // Add to cart
-        document.getElementById("add-to-cart").addEventListener("click", () => {
-            if (!selectedMaterialId) return alert("Please select a material.");
-
-            const price = parseFloat(priceInput.value);
-            const qty = parseInt(qtyInput.value);
-            const maxQty = parseInt(qtyInput.max);
-
-            if (maxQty && qty > maxQty) {
-                alert(`Only ${maxQty} items available in stock.`);
+            if (!variants || variants.length === 0) {
+                variantSelector.classList.remove("show");
                 return;
             }
 
-            if (qty <= 0) return alert("Quantity must be greater than 0.");
+            variants.forEach((variant, index) => {
+                const variantHtml = `
+            <div class="variant-option" data-id="${variant.id}" data-price="${variant.price}">
+                <input type="radio" name="variant" value="${variant.id}" 
+                    data-name="${variant.name}" data-price="${variant.price}" ${index === 0 ? "checked" : ""}>
+                <div class="variant-info">
+                    <span>${variant.name} (${variant.quantity} ${variant.unit})</span>
+                    <span class="variant-price">₱${parseFloat(variant.price).toFixed(2)}</span>
+                </div>
+            </div>
+        `;
+                variantOptionsContainer.insertAdjacentHTML("beforeend", variantHtml);
+            });
 
-            const selectedOption = document.querySelector(`.material-option[data-id="${selectedMaterialId}"]`);
-            let name = selectedOption.dataset.name;
+            const allOptions = variantOptionsContainer.querySelectorAll(".variant-option");
 
-            // If variant is selected, append variant name
-            if (selectedVariantId) {
-                const variantInput = variantOptionsContainer.querySelector(`input[value="${selectedVariantId}"]`);
-                if (variantInput) {
-                    const variantName = variantInput.dataset.name;
-                    name = `${name} - ${variantName}`;
-                }
+            allOptions.forEach(option => {
+                option.addEventListener("click", () => {
+                    const radio = option.querySelector("input");
+                    radio.checked = true;
+
+                    selectedVariantId = radio.value;
+                    selectedVariantName = radio.dataset.name; // ADD THIS
+                    selectedVariantPrice = radio.dataset.price;
+
+                    allOptions.forEach(opt => opt.classList.remove("selected"));
+                    option.classList.add("selected");
+                });
+            });
+
+            // auto-select first
+            const firstRadio = variantOptionsContainer.querySelector("input");
+            if (firstRadio) {
+                selectedVariantId = firstRadio.value;
+                priceInput.value = firstRadio.dataset.price;
+                firstRadio.closest(".variant-option").classList.add("selected");
             }
 
+            // IMPORTANT: show dropdown
+            variantSelector.classList.add("show");
+        }
+
+
+        // Add to cart
+        document.getElementById("add-to-cart").addEventListener("click", () => {
+            if (!selectedMaterialId) {
+                return alert("Please select a material.");
+            }
+
+            const selectedOption = document.querySelector(`.material-option[data-id="${selectedMaterialId}"]`);
+            if (!selectedOption) {
+                return alert("Invalid material selection.");
+            }
+
+            if (currentVariants.length > 0 && !selectedVariantId) {
+                return alert("Please select a variant.");
+            }
+
+            const baseName = selectedOption.dataset.name;
+
+            let variantLabel = "";
+
+            // Testing for not letting you order more than what you have :)
+            const qty = parseInt(qtyInput.value);
+            const price = parseFloat(priceInput.value);
+
+            let availableStock = 0;
+
+            const selectedVariantRadio =
+                variantOptionsContainer.querySelector('input[name="variant"]:checked');
+
+            if (variants.length > 0) {
+                if (!selectedVariantRadio) {
+                    return alert("Please select a variant.");
+                }
+
+                const variantId = selectedVariantRadio.value;
+                const selectedVariant = variants.find(v => v.id == variantId);
+
+                availableStock = selectedVariant ? parseInt(selectedVariant.quantity) : 0;
+            } else {
+                const availableQtyText =
+                    selectedOption.querySelector(".quantity-badge")?.textContent || "0";
+
+                availableStock = parseInt(availableQtyText);
+            }
+
+            if (qty > availableStock) {
+                return alert(`Not enough stock! Only ${availableStock} available.`);
+            }
+
+            const finalName = selectedVariantName
+                ? `${baseName} #${selectedVariantName}`
+                : baseName;
+
+            if (!qty || qty <= 0) return alert("Invalid quantity.");
+            if (!price || price <= 0) return alert("Invalid price.");
+
             const subtotal = qty * price;
-            cart.push({ id: selectedMaterialId, variantId: selectedVariantId || null, name, qty, price, subtotal });
+
+            const existingQty = cart
+                .filter(i => i.id === selectedMaterialId && i.variantId === (selectedVariantId || null))
+                .reduce((sum, i) => i.qty + sum, 0);
+
+            if (existingQty + qty > availableStock) {
+                return alert(`Stock limit reached! Only ${availableStock} total allowed.`);
+            }
+
+            cart.push({
+                id: selectedMaterialId,
+                variantId: selectedVariantId || null,
+                name: finalName,
+                qty,
+                price,
+                subtotal
+
+            });
+
             renderCart();
 
             // Reset form
@@ -1119,6 +1192,7 @@ ${parseFloat(variant.price).toFixed(2)}</span>
             qtyInput.value = 1;
             selectedMaterialId = null;
             selectedVariantId = null;
+
             document.querySelectorAll(".material-option").forEach(opt => opt.classList.remove("active"));
         });
 

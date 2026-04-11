@@ -294,7 +294,15 @@ def inventory_json_payload():
                 "unit": m.unit,
                 "reorder_point": m.reorder_point,
                 "variants": (
-                    [{"id": v.id, "quantity": v.quantity} for v in m.variants]
+                    [
+                        {
+                            "id": v.id,
+                            "name": v.name,
+                            "quantity": v.quantity,
+                            "price": v.price
+                        }
+                        for v in m.variants
+                    ]
                     if m.variants
                     else None
                 ),
@@ -683,12 +691,23 @@ def edit_material(id):
 
 @app.route("/material/delete/<int:id>", methods=["POST"])
 def delete_material(id):
-    material = Material.query.get_or_404(id)
-    if SaleItem.query.filter_by(material_id=id).first():
+    material = Material.query.options(
+        joinedload(Material.variants),
+        joinedload(Material.sale_items)
+    ).get_or_404(id)
+
+    # ❌ Block delete if ANY sale items exist (material or variant)
+    if material.sale_items:
         flash("Cannot delete a material that appears in sales history.", "danger")
         return redirect(url_for("inventory"))
+
+    # 🔥 manually delete variants first (extra safety)
+    for v in material.variants:
+        db.session.delete(v)
+
     db.session.delete(material)
     db.session.commit()
+
     flash("Material deleted.", "success")
     return redirect(url_for("inventory"))
 

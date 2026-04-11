@@ -74,6 +74,9 @@
                 font-size: 40px;
                 background: #eef2ff;
                 color: #667eea;
+
+                position: relative;
+                z-index: 1;
             }
 
             .product-content {
@@ -98,18 +101,23 @@
                 left: 0;
                 right: 0;
                 height: 110px;
+
                 background: rgba(0, 0, 0, 0.65);
                 display: flex;
                 justify-content: center;
                 align-items: center;
                 gap: 8px;
+
                 opacity: 0;
                 transition: 0.25s;
+
+                z-index: 999;
             }
 
             .product-card:hover .product-actions {
                 opacity: 1;
             }
+
 
             .product-actions a,
             .product-actions button {
