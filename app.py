@@ -676,17 +676,25 @@ def edit_material(id):
     suppliers = Supplier.query.order_by(Supplier.name).all()
 
     if request.method == "POST":
+        material.name = request.form.get("name", material.name)
+        material.category = request.form.get("category", material.category)
+        material.unit = request.form.get("unit", material.unit)
+
+        material.reorder_point = _parse_float(
+            request.form.get("reorder_point"),
+            material.reorder_point
+        )
+
+        material.supplier_id = _parse_int_optional(
+            request.form.get("supplier_id")
+        )
+
         _save_material_from_form(material, is_new=False)
+
         db.session.commit()
+
         flash(f"Material '{material.name}' updated.", "success")
         return redirect(url_for("inventory"))
-
-    return render_template(
-        "add_edit_material.html",
-        material=material,
-        categories=CATEGORIES,
-        suppliers=suppliers,
-    )
 
 
 @app.route("/material/delete/<int:id>", methods=["POST"])
