@@ -99,6 +99,11 @@ def receive_reorder(reorder_id):
     return redirect(url_for("notifications"))
 
 
+def mark_received(self):
+    self.status = "Received"
+    self.dismissed = True
+
+
 class MaterialVariant(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     material_id = db.Column(db.Integer, db.ForeignKey(
@@ -312,6 +317,8 @@ def inventory_json_payload():
 
 
 def _save_material_from_form(material, is_new):
+    if not material:
+        return
 
     names = request.form.getlist("variant_name[]")
     qtys = request.form.getlist("variant_quantity[]")
@@ -563,7 +570,10 @@ def checkout():
     if not cart:
         return jsonify(success=False, message="Cart is empty"), 400
 
-    total = sum(_parse_float(item.get("subtotal"), 0.0) for item in cart)
+    total = sum(
+        float(item.get("price", 0)) * float(item.get("qty", 0))
+        for item in cart
+    )
 
     for item in cart:
         mid = int(item["id"])
@@ -629,6 +639,9 @@ def checkout():
         else:
             m.quantity -= qty
 
+    print(data)
+    print(cart)
+
     db.session.commit()
 
     return jsonify(success=True, updated_inventory=inventory_json_payload())
@@ -645,19 +658,23 @@ def add_material():
     suppliers = Supplier.query.order_by(Supplier.name).all()
 
     if request.method == "POST":
-        name = request.form.get("name", "").strip()
 
-        if not name:
-            flash("Material name is required!", "danger")
-            return redirect(url_for("add_material"))
+        m = Material(
+            name=request.form.get("name"),
+            category=request.form.get("category"),
+            unit=request.form.get("unit", "pcs"),
+            reorder_point=_parse_float(request.form.get("reorder_point")),
+            price_per_unit=_parse_float(request.form.get("price_per_unit")),
+            supplier_id=_parse_int_optional(request.form.get("supplier_id"))
+        )
 
-        m = Material(name=name)   # ✅ FIX: set name BEFORE saving
         db.session.add(m)
         db.session.flush()
 
         _save_material_from_form(m, is_new=True)
 
         db.session.commit()
+
         flash(f"Material '{m.name}' added.", "success")
         return redirect(url_for("inventory"))
 
@@ -672,10 +689,14 @@ def add_material():
 @app.route("/material/edit/<int:id>", methods=["GET", "POST"])
 def edit_material(id):
     material = Material.query.options(
-        joinedload(Material.variants)).get_or_404(id)
+        joinedload(Material.variants)
+    ).get_or_404(id)
+
     suppliers = Supplier.query.order_by(Supplier.name).all()
 
     if request.method == "POST":
+        print("EDIT FORM RECEIVED:", request.form)
+
         material.name = request.form.get("name", material.name)
         material.category = request.form.get("category", material.category)
         material.unit = request.form.get("unit", material.unit)
@@ -686,15 +707,21 @@ def edit_material(id):
         )
 
         material.supplier_id = _parse_int_optional(
-            request.form.get("supplier_id")
-        )
+            request.form.get("supplier_id"))
 
         _save_material_from_form(material, is_new=False)
 
         db.session.commit()
 
-        flash(f"Material '{material.name}' updated.", "success")
+        flash("Material updated successfully.", "success")
         return redirect(url_for("inventory"))
+
+    return render_template(
+        "add_edit_material.html",
+        material=material,
+        categories=CATEGORIES,
+        suppliers=suppliers,
+    )
 
 
 @app.route("/material/delete/<int:id>", methods=["POST"])
@@ -704,12 +731,10 @@ def delete_material(id):
         joinedload(Material.sale_items)
     ).get_or_404(id)
 
-    # ❌ Block delete if ANY sale items exist (material or variant)
     if material.sale_items:
         flash("Cannot delete a material that appears in sales history.", "danger")
         return redirect(url_for("inventory"))
 
-    # 🔥 manually delete variants first (extra safety)
     for v in material.variants:
         db.session.delete(v)
 

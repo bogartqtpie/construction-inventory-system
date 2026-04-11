@@ -927,7 +927,7 @@
                 try {
                     currentVariants = JSON.parse(variantsJson || "[]");
                 } catch (e) {
-                    variants = [];
+                    currentVariants = [];
                 }
 
                 if (currentVariants.length > 0) {
@@ -1132,16 +1132,16 @@
 
             let availableStock = 0;
 
-            const selectedVariantRadio =
-                variantOptionsContainer.querySelector('input[name="variant"]:checked');
+            if (currentVariants.length > 0) {
+                const selectedVariantRadio =
+                    variantOptionsContainer.querySelector('input[name="variant"]:checked');
 
-            if (variants.length > 0) {
                 if (!selectedVariantRadio) {
                     return alert("Please select a variant.");
                 }
 
                 const variantId = selectedVariantRadio.value;
-                const selectedVariant = variants.find(v => v.id == variantId);
+                const selectedVariant = currentVariants.find(v => v.id == variantId);
 
                 availableStock = selectedVariant ? parseInt(selectedVariant.quantity) : 0;
             } else {
@@ -1160,7 +1160,7 @@
                 : baseName;
 
             if (!qty || qty <= 0) return alert("Invalid quantity.");
-            if (!price || price <= 0) return alert("Invalid price.");
+            if (isNaN(price) || price <= 0) return alert("Invalid price.");
 
             const subtotal = qty * price;
 
@@ -1280,6 +1280,8 @@
             });
         }
     });
+
+
 </script>
 
 {% endblock %}

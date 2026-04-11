@@ -149,6 +149,7 @@
                 {% for m in materials %}
 
                 {% set any_low_stock = false %}
+
                 {% if m.variants %}
                 {% for v in m.variants %}
                 {% if v.quantity <= m.reorder_point %} {% set any_low_stock=true %} {% endif %} {% endfor %} {% else %}
@@ -185,8 +186,9 @@
                     <div class="product-actions">
                         <a href="{{ url_for('reorder', material_id=m.id) }}" class="btn btn-light btn-sm">Order</a>
                         <a href="{{ url_for('edit_material', id=m.id) }}" class="btn btn-primary btn-sm">Edit</a>
-                        <form method="POST" action="{{ url_for('delete_material', id=m.id) }}">
-                            <button class="btn btn-danger btn-sm">Delete</button>
+                        <form method="POST" action="{{ url_for('delete_material', id=m.id) }}"
+                            onsubmit="return confirm('Delete this material?')">
+                            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
                         </form>
                     </div>
 
@@ -289,6 +291,44 @@
             cb.addEventListener("change", filterInventory);
         });
 
+    });
+    document.addEventListener("click", function (e) {
+        if (e.target.classList.contains("add-to-cart-btn")) {
+
+            const card = e.target.closest(".product-card");
+
+            const materialId = e.target.dataset.id;
+            const qty = 1; // or from input
+            const price = parseFloat(e.target.dataset.price || 0);
+            const variantId = null; // or from dropdown if you have variants
+
+            fetch("/checkout", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    cart: [
+                        {
+                            id: materialId,
+                            qty: qty,
+                            price: price,
+                            variantId: variantId
+                        }
+                    ]
+                })
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        alert("Added to cart / checked out!");
+                        console.log(data.updated_inventory);
+                        location.reload();
+                    } else {
+                        alert(data.message);
+                    }
+                });
+        }
     });
 </script>
 
