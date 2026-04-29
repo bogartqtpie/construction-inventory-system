@@ -2,23 +2,249 @@
 
 {% block content %}
 
-<div class="card shadow-sm border-0" style="border-radius: 15px; overflow: hidden;">
-    <!-- HEADER with Gradient -->
+<div class="card shadow-sm border-0 mb-4" style="border-radius: 15px; overflow: hidden;">
     <div class="card-header"
         style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 20px 30px;">
         <h2 class="mb-0" style="font-weight: 700; font-size: 28px; letter-spacing: 0.5px;">
-            <i class="bi bi-gear" style="margin-right: 12px;"></i>System Settings
+            <i class="bi bi-shield-lock" style="margin-right: 12px;"></i>Admin Controls
         </h2>
     </div>
 
-    <!-- BODY -->
     <div class="card-body"
-        style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.02) 0%, rgba(118, 75, 162, 0.02) 100%); padding: 40px;">
-        <div style="text-align: center; padding: 40px;">
-            <i class="bi bi-sliders"
-                style="font-size: 48px; color: #667eea; margin-bottom: 16px; display: block;"></i>
-            <p style="color: #2c3e50; font-size: 18px; font-weight: 600; margin-bottom: 8px;">Coming Soon</p>
-            <p style="color: #7f8c8d;">This page will contain system configuration options.</p>
+        style="background: linear-gradient(135deg, rgba(102, 126, 234, 0.02) 0%, rgba(118, 75, 162, 0.02) 100%); padding: 25px;">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="p-3 rounded bg-light border h-100">
+                    <div class="text-muted small">Total Accounts</div>
+                    <div class="fw-bold fs-4">{{ stats.users }}</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="p-3 rounded bg-light border h-100">
+                    <div class="text-muted small">Admin Accounts</div>
+                    <div class="fw-bold fs-4">{{ stats.admins }}</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="p-3 rounded bg-light border h-100">
+                    <div class="text-muted small">Total Sales Records</div>
+                    <div class="fw-bold fs-4">{{ stats.sales }}</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="p-3 rounded bg-light border h-100">
+                    <div class="text-muted small">Materials</div>
+                    <div class="fw-bold fs-4">{{ stats.materials }}</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="p-3 rounded bg-light border h-100">
+                    <div class="text-muted small">Suppliers</div>
+                    <div class="fw-bold fs-4">{{ stats.suppliers }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0" style="border-radius: 15px; overflow: hidden;">
+    <div class="card-header"
+        style="background: linear-gradient(135deg, #16a085 0%, #27ae60 100%); color: white; border: none; padding: 20px 30px;">
+        <h3 class="mb-0" style="font-weight: 700; font-size: 22px;">
+            <i class="bi bi-calendar-check"></i> Monthly Sales
+        </h3>
+    </div>
+    <div class="card-body p-4">
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Month</th>
+                        <th>Transactions</th>
+                        <th>Total Sales</th>
+                        <th>Save</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if monthly_sales %}
+                    {% for row in monthly_sales %}
+                    <tr>
+                        <td class="fw-semibold">{{ row.month }}</td>
+                        <td>{{ row.count }}</td>
+                        <td>PHP {{ "%.2f"|format(row.total) }}</td>
+                        <td>
+                            <a class="btn btn-sm btn-outline-success"
+                                href="{{ url_for('export_month_sales_csv', month=row.month) }}">
+                                Save Month
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center text-muted">No sales data yet.</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0 mt-4" style="border-radius: 15px; overflow: hidden;">
+    <div class="card-header"
+        style="background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%); color: white; border: none; padding: 20px 30px;">
+        <h3 class="mb-0" style="font-weight: 700; font-size: 22px;">
+            <i class="bi bi-shield-fill-check"></i> Admin Accounts
+        </h3>
+    </div>
+    <div class="card-body p-4">
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Username</th>
+                        <th>Role</th>
+                        <th>Created</th>
+                        <th style="min-width: 350px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in admin_users %}
+                    <tr>
+                        <td class="fw-semibold">
+                            {{ user.username }}
+                            {% if user.id == current_user.id %}
+                            <span class="badge bg-info text-dark ms-1">You</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if user.is_admin %}
+                            <span class="badge bg-primary">Admin</span>
+                            {% else %}
+                            <span class="badge bg-secondary">User</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ user.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
+                        <td>
+                            <div class="d-flex flex-wrap gap-2">
+                                <form method="post" action="{{ url_for('toggle_admin', user_id=user.id) }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-primary">
+                                        {% if user.is_admin %}Remove Admin{% else %}Make Admin{% endif %}
+                                    </button>
+                                </form>
+
+                                <button class="btn btn-sm btn-outline-warning" type="button" data-bs-toggle="collapse"
+                                    data-bs-target="#reset-{{ user.id }}">
+                                    Reset Password
+                                </button>
+
+                                <form method="post" action="{{ url_for('delete_user', user_id=user.id) }}"
+                                    onsubmit="return confirm('Delete account {{ user.username }}? This cannot be undone.');">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                </form>
+                            </div>
+
+                            <div class="collapse mt-2" id="reset-{{ user.id }}">
+                                <form method="post" action="{{ url_for('admin_reset_password', user_id=user.id) }}"
+                                    class="row g-2">
+                                    <div class="col-md-5">
+                                        <input type="password" name="new_password" class="form-control form-control-sm"
+                                            placeholder="New password" required>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <input type="password" name="confirm_password"
+                                            class="form-control form-control-sm" placeholder="Confirm password" required>
+                                    </div>
+                                    <div class="col-md-2 d-grid">
+                                        <button type="submit" class="btn btn-sm btn-warning">Save</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center text-muted">No admin accounts found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0 mt-4" style="border-radius: 15px; overflow: hidden;">
+    <div class="card-header"
+        style="background: linear-gradient(135deg, #6c757d 0%, #495057 100%); color: white; border: none; padding: 20px 30px;">
+        <h3 class="mb-0" style="font-weight: 700; font-size: 22px;">
+            <i class="bi bi-people"></i> Non-Admin Accounts
+        </h3>
+    </div>
+    <div class="card-body p-4">
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>Username</th>
+                        <th>Role</th>
+                        <th>Created</th>
+                        <th style="min-width: 350px;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in non_admin_users %}
+                    <tr>
+                        <td class="fw-semibold">
+                            {{ user.username }}
+                            {% if user.id == current_user.id %}
+                            <span class="badge bg-info text-dark ms-1">You</span>
+                            {% endif %}
+                        </td>
+                        <td><span class="badge bg-secondary">User</span></td>
+                        <td>{{ user.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
+                        <td>
+                            <div class="d-flex flex-wrap gap-2">
+                                <form method="post" action="{{ url_for('toggle_admin', user_id=user.id) }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-primary">Make Admin</button>
+                                </form>
+
+                                <button class="btn btn-sm btn-outline-warning" type="button" data-bs-toggle="collapse"
+                                    data-bs-target="#reset-{{ user.id }}">
+                                    Reset Password
+                                </button>
+
+                                <form method="post" action="{{ url_for('delete_user', user_id=user.id) }}"
+                                    onsubmit="return confirm('Delete account {{ user.username }}? This cannot be undone.');">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                                </form>
+                            </div>
+
+                            <div class="collapse mt-2" id="reset-{{ user.id }}">
+                                <form method="post" action="{{ url_for('admin_reset_password', user_id=user.id) }}"
+                                    class="row g-2">
+                                    <div class="col-md-5">
+                                        <input type="password" name="new_password" class="form-control form-control-sm"
+                                            placeholder="New password" required>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <input type="password" name="confirm_password"
+                                            class="form-control form-control-sm" placeholder="Confirm password" required>
+                                    </div>
+                                    <div class="col-md-2 d-grid">
+                                        <button type="submit" class="btn btn-sm btn-warning">Save</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="4" class="text-center text-muted">No non-admin accounts found.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
     </div>
 </div>

@@ -534,8 +534,9 @@
                                         </div>
                                         {% if m.variants %}
                                         {% set total_qty = m.variants|map(attribute='quantity')|sum %}
+                                        {% set has_low_variant = m.variants|selectattr('quantity', '<=', m.reorder_point)|list|length > 0 %}
                                         <span
-                                            class="quantity-badge {% if total_qty <= m.reorder_point %}low{% endif %}">
+                                            class="quantity-badge {% if has_low_variant %}low{% endif %}">
                                             {{ total_qty }} {{ m.unit }}
                                         </span>
                                         {% else %}
@@ -735,16 +736,24 @@
                                                     {% endif %}
                                                 </td>
                                                 <td>
-                                                    {% set total_qty = m.variants|map(attribute='quantity')|sum if
-                                                    m.variants else m.quantity %}
-                                                    {% if total_qty <= m.reorder_point %} <span class="badge bg-danger"
-                                                        style="font-size: 11px;"><i
-                                                            class="bi bi-exclamation-circle"></i>
-                                                        LOW</span>
-                                                        {% else %}
-                                                        <span class="badge bg-success" style="font-size: 11px;"><i
-                                                                class="bi bi-check-circle"></i> OK</span>
-                                                        {% endif %}
+                                                    {% if m.variants %}
+                                                    {% set has_low_variant = m.variants|selectattr('quantity', '<=', m.reorder_point)|list|length > 0 %}
+                                                    {% if has_low_variant %}
+                                                    <span class="badge bg-danger" style="font-size: 11px;"><i
+                                                            class="bi bi-exclamation-circle"></i> LOW</span>
+                                                    {% else %}
+                                                    <span class="badge bg-success" style="font-size: 11px;"><i
+                                                            class="bi bi-check-circle"></i> OK</span>
+                                                    {% endif %}
+                                                    {% else %}
+                                                    {% if m.quantity <= m.reorder_point %}
+                                                    <span class="badge bg-danger" style="font-size: 11px;"><i
+                                                            class="bi bi-exclamation-circle"></i> LOW</span>
+                                                    {% else %}
+                                                    <span class="badge bg-success" style="font-size: 11px;"><i
+                                                            class="bi bi-check-circle"></i> OK</span>
+                                                    {% endif %}
+                                                    {% endif %}
                                                 </td>
                                             </tr>
                                             {% if m.variants %}
@@ -1266,12 +1275,15 @@
             tbody.innerHTML = "";
             inventory.forEach(m => {
                 const totalQty = m.variants ? m.variants.reduce((sum, v) => sum + v.quantity, 0) : m.quantity;
+                const isLow = m.variants
+                    ? m.variants.some(v => Number(v.quantity) <= Number(m.reorder_point))
+                    : Number(m.quantity) <= Number(m.reorder_point);
                 tbody.insertAdjacentHTML("beforeend", `
                     <tr>
                         <td><strong style="font-size: 13px;">${m.name}</strong></td>
                         <td style="font-size: 13px;">${totalQty}</td>
                         <td>
-                            ${totalQty <= m.reorder_point
+                            ${isLow
                         ? '<span class="badge bg-danger" style="font-size: 11px;"><i class="bi bi-exclamation-circle"></i> LOW</span>'
                         : '<span class="badge bg-success" style="font-size: 11px;"><i class="bi bi-check-circle"></i> OK</span>'}
                         </td>

@@ -45,6 +45,15 @@
                     onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
                     onblur="this.style.borderColor='rgba(102, 126, 234, 0.2)'; this.style.boxShadow='none'">
             </div>
+            <div class="col-md-4">
+                <label for="email" class="form-label fw-semibold"
+                    style="color: #2c3e50; font-size: 14px; margin-bottom: 10px;">Email</label>
+                <input id="email" type="email" name="email" class="form-control" value="{{ supplier.email or '' }}"
+                    placeholder="supplier@example.com"
+                    style="border: 1.5px solid rgba(102, 126, 234, 0.2); border-radius: 8px; padding: 10px 14px; transition: all 0.3s ease; font-size: 14px;"
+                    onfocus="this.style.borderColor='#667eea'; this.style.boxShadow='0 0 0 3px rgba(102, 126, 234, 0.1)'"
+                    onblur="this.style.borderColor='rgba(102, 126, 234, 0.2)'; this.style.boxShadow='none'">
+            </div>
 
             <div class="col-12 text-end mt-3">
                 <button type="submit" class="btn"
