@@ -79,11 +79,13 @@ class Supplier(db.Model):
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), nullable=False, unique=True, index=True)
+    username = db.Column(db.String(80), nullable=False,
+                         unique=True, index=True)
     email = db.Column(db.String(255), nullable=True, unique=True, index=True)
     password_hash = db.Column(db.String(255), nullable=False)
     is_admin = db.Column(db.Boolean, nullable=False, default=False)
-    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, nullable=False,
+                           default=datetime.utcnow)
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -217,6 +219,51 @@ def material_is_low_stock(m):
     if m.variants:
         return any(v.quantity <= m.reorder_point for v in m.variants)
     return m.quantity <= m.reorder_point
+
+
+def _auto_create_reorder_request_if_needed(material, variant=None):
+    """
+    Automatically create a ReorderRequest when quantity drops below reorder_point.
+    Only creates if there's no existing Pending or Ordered request.
+    """
+    if not material or material.reorder_point <= 0:
+        return
+
+    # Reset dismiss flag if quantity goes back above threshold
+    current_qty = variant.quantity if variant else material.quantity
+    if current_qty > material.reorder_point:
+        material.dismiss_notification = False
+        return
+
+    # Check if quantity is now below threshold
+    if current_qty > material.reorder_point:
+        return
+
+    # Check if there's already an active request (Pending or Ordered)
+    existing = ReorderRequest.query.filter(
+        ReorderRequest.material_id == material.id,
+        ReorderRequest.variant_id == (variant.id if variant else None),
+        ReorderRequest.status.in_(["Pending", "Ordered"]),
+        ReorderRequest.dismissed == False
+    ).first()
+
+    if existing:
+        return
+
+    # Create new auto-generated reorder request
+    # Use supplier from material if available
+    default_qty = max(material.reorder_point - current_qty, 1.0)
+
+    new_request = ReorderRequest(
+        material_id=material.id,
+        variant_id=variant.id if variant else None,
+        supplier_id=material.supplier_id,
+        quantity=default_qty,
+        notes="Auto-generated: Stock fell below reorder point",
+        status="Pending",
+        dismissed=False
+    )
+    db.session.add(new_request)
 
 
 def count_low_notifications():
@@ -387,6 +434,8 @@ def _save_material_from_form(material, is_new):
                 v.quantity = q
                 v.unit = u
                 v.price = p
+                # Auto-check for reorder when variant quantity changes
+                _auto_create_reorder_request_if_needed(material, v)
             else:
                 db.session.add(
                     MaterialVariant(
@@ -397,6 +446,7 @@ def _save_material_from_form(material, is_new):
                         price=p,
                     )
                 )
+                # New variant will be auto-checked after flush
 
         # 🔥 DELETE removed variants (VERY IMPORTANT FIX)
         for name, v in existing_variants.items():
@@ -406,6 +456,9 @@ def _save_material_from_form(material, is_new):
     else:
         # fallback: no variants = use main stock
         material.quantity = _parse_float(request.form.get("quantity"), 0.0)
+
+        # Auto-check for reorder when main material quantity changes
+        _auto_create_reorder_request_if_needed(material)
 
         # 🔥 optional cleanup: remove all variants if switching back
         for v in material.variants:
@@ -490,8 +543,10 @@ def _send_password_reset_email(target_email, reset_link):
     smtp_port = int(os.environ.get("SMTP_PORT", "587"))
     smtp_username = os.environ.get("SMTP_USERNAME", DEFAULT_SYSTEM_EMAIL)
     smtp_password = os.environ.get("SMTP_PASSWORD")
-    smtp_use_tls = os.environ.get("SMTP_USE_TLS", "true").lower() in ("1", "true", "yes")
-    mail_from = os.environ.get("MAIL_FROM", DEFAULT_SYSTEM_EMAIL) or smtp_username
+    smtp_use_tls = os.environ.get(
+        "SMTP_USE_TLS", "true").lower() in ("1", "true", "yes")
+    mail_from = os.environ.get(
+        "MAIL_FROM", DEFAULT_SYSTEM_EMAIL) or smtp_username
 
     if not smtp_host or not mail_from:
         return False
@@ -515,8 +570,10 @@ def _send_reorder_email(material, supplier, quantity, notes, variant=None):
     smtp_port = int(os.environ.get("SMTP_PORT", "587"))
     smtp_username = os.environ.get("SMTP_USERNAME", DEFAULT_SYSTEM_EMAIL)
     smtp_password = os.environ.get("SMTP_PASSWORD")
-    smtp_use_tls = os.environ.get("SMTP_USE_TLS", "true").lower() in ("1", "true", "yes")
-    mail_from = os.environ.get("MAIL_FROM", DEFAULT_SYSTEM_EMAIL) or smtp_username
+    smtp_use_tls = os.environ.get(
+        "SMTP_USE_TLS", "true").lower() in ("1", "true", "yes")
+    mail_from = os.environ.get(
+        "MAIL_FROM", DEFAULT_SYSTEM_EMAIL) or smtp_username
 
     if not smtp_host or not mail_from:
         return False, "SMTP is not configured."
@@ -675,7 +732,8 @@ def admin_required(func):
 
 @app.before_request
 def require_login_for_pos():
-    public_endpoints = {"login", "register", "forgot_password", "reset_password", "static"}
+    public_endpoints = {"login", "register",
+                        "forgot_password", "reset_password", "static"}
     endpoint = request.endpoint
 
     if endpoint is None:
@@ -783,6 +841,8 @@ def checkout():
     db.session.add(sale)
     db.session.flush()
 
+    auto_reordered_items = []
+
     for item in cart:
         mid = int(item["id"])
         qty = float(item.get("qty", 0))
@@ -806,15 +866,35 @@ def checkout():
         if vid:
             v = MaterialVariant.query.get(vid)
             v.quantity -= qty
+            # Check if this triggers auto-reorder
+            was_above = (float(v.quantity or 0.0) + qty) > m.reorder_point
+            is_below = v.quantity <= m.reorder_point
+            if was_above and is_below:
+                auto_reordered_items.append(f"{m.name} - {v.name}")
+            _auto_create_reorder_request_if_needed(m, v)
         else:
             m.quantity -= qty
+            # Check if this triggers auto-reorder
+            was_above = (float(m.quantity or 0.0) + qty) > m.reorder_point
+            is_below = m.quantity <= m.reorder_point
+            if was_above and is_below:
+                auto_reordered_items.append(m.name)
+            _auto_create_reorder_request_if_needed(m)
 
     print(data)
     print(cart)
 
     db.session.commit()
 
-    return jsonify(success=True, updated_inventory=inventory_json_payload())
+    response = {
+        "success": True,
+        "updated_inventory": inventory_json_payload()
+    }
+    if auto_reordered_items:
+        response["auto_reordered"] = auto_reordered_items
+        response["message"] = f"Reorder notifications created for: {', '.join(auto_reordered_items)}"
+
+    return jsonify(response)
 
 
 @app.route("/inventory")
@@ -965,7 +1045,8 @@ def reorder(material_id):
                 material, supplier, qty, notes, variant=selected_variant
             )
             if sent:
-                flash(f"Reorder request recorded and email sent to {supplier.name}.", "success")
+                flash(
+                    f"Reorder request recorded and email sent to {supplier.name}.", "success")
             elif reason == "SMTP is not configured.":
                 flash("Reorder request recorded successfully.", "success")
                 flash(
@@ -978,8 +1059,10 @@ def reorder(material_id):
                     f"Reorder request recorded, but email was not sent ({reason}).",
                     "warning",
                 )
-        except Exception:
-            flash("Reorder request recorded, but email sending failed.", "warning")
+        except Exception as e:
+            print("EMAIL ERROR:", str(e))  # shows in Render logs
+            flash(
+                f"Reorder request recorded, but email failed: {str(e)}", "warning")
         return redirect(url_for("inventory"))
     return render_template("reorder.html", material=material, suppliers=suppliers)
 
@@ -1003,13 +1086,18 @@ def update_reorder_status(id):
         if added_qty > 0:
             if variant:
                 variant.quantity = float(variant.quantity or 0.0) + added_qty
+                # Check if still below reorder point after receiving
+                _auto_create_reorder_request_if_needed(material, variant)
             elif material:
                 material.quantity = float(material.quantity or 0.0) + added_qty
+                # Check if still below reorder point after receiving
+                _auto_create_reorder_request_if_needed(material)
 
     db.session.commit()
     if status == "Received" and previous_status != "Received":
         unit_label = (
-            (rr.variant.unit if rr.variant else (rr.material.unit if rr.material else ""))
+            (rr.variant.unit if rr.variant else (
+                rr.material.unit if rr.material else ""))
             or ""
         )
         item_name = rr.material.name if rr.material else "material"
@@ -1599,7 +1687,8 @@ def _migrate_sqlite_schema():
                 )
 
         if insp.has_table("supplier"):
-            supplier_columns = {c["name"] for c in insp.get_columns("supplier")}
+            supplier_columns = {c["name"]
+                                for c in insp.get_columns("supplier")}
             if "email" not in supplier_columns:
                 conn.execute(
                     text("ALTER TABLE supplier ADD COLUMN email VARCHAR(255)")
@@ -1618,11 +1707,13 @@ def _migrate_user_auth_schema():
 
     with engine.connect() as conn:
         if "email" not in user_columns:
-            conn.execute(text('ALTER TABLE "user" ADD COLUMN email VARCHAR(255)'))
+            conn.execute(
+                text('ALTER TABLE "user" ADD COLUMN email VARCHAR(255)'))
 
         if "is_admin" not in user_columns:
             if engine.dialect.name == "postgresql":
-                conn.execute(text('ALTER TABLE "user" ADD COLUMN is_admin BOOLEAN DEFAULT FALSE'))
+                conn.execute(
+                    text('ALTER TABLE "user" ADD COLUMN is_admin BOOLEAN DEFAULT FALSE'))
                 conn.execute(
                     text(
                         'UPDATE "user" SET is_admin = TRUE '
@@ -1630,7 +1721,8 @@ def _migrate_user_auth_schema():
                     )
                 )
             else:
-                conn.execute(text('ALTER TABLE "user" ADD COLUMN is_admin BOOLEAN DEFAULT 0'))
+                conn.execute(
+                    text('ALTER TABLE "user" ADD COLUMN is_admin BOOLEAN DEFAULT 0'))
                 conn.execute(
                     text(
                         'UPDATE "user" SET is_admin = 1 '
@@ -1639,13 +1731,15 @@ def _migrate_user_auth_schema():
                 )
 
         if insp.has_table("supplier"):
-            supplier_columns = {c["name"] for c in insp.get_columns("supplier")}
+            supplier_columns = {c["name"]
+                                for c in insp.get_columns("supplier")}
             if "email" not in supplier_columns:
                 conn.execute(
                     text("ALTER TABLE supplier ADD COLUMN email VARCHAR(255)")
                 )
         if insp.has_table("reorder_request"):
-            reorder_columns = {c["name"] for c in insp.get_columns("reorder_request")}
+            reorder_columns = {c["name"]
+                               for c in insp.get_columns("reorder_request")}
             if "variant_id" not in reorder_columns:
                 conn.execute(
                     text("ALTER TABLE reorder_request ADD COLUMN variant_id INTEGER")

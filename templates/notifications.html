@@ -27,20 +27,32 @@
                         <span style="margin-left: 6px; color: #667eea;">- {{ order.variant.name }}</span>
                         {% endif %}
                         <span style="margin-left: 8px;">
-                            {{ order.quantity }} {{ (order.variant.unit if order.variant else (order.material.unit if order.material else '')) or '' }}
+                            {{ order.quantity }} {{ (order.variant.unit if order.variant else (order.material.unit if
+                            order.material else '')) or '' }}
                         </span>
                         <span class="badge ms-2"
                             style="background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); color: white; padding: 6px 10px; border-radius: 20px; font-size: 11px; font-weight: 600;">
                             Pending
                         </span>
                     </div>
-                    <form action="{{ url_for('update_reorder_status', id=order.id) }}" method="POST" class="d-inline">
-                        <input type="hidden" name="status" value="Ordered">
-                        <button type="submit" class="btn"
-                            style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; font-weight: 600; padding: 6px 12px; border-radius: 6px; font-size: 12px;">
-                            <i class="bi bi-hourglass-split"></i> Mark Ordered
-                        </button>
-                    </form>
+                    <div class="d-flex gap-2" style="align-items: center;">
+                        <form action="{{ url_for('update_reorder_status', id=order.id) }}" method="POST"
+                            class="d-inline">
+                            <input type="hidden" name="status" value="Ordered">
+                            <button type="submit" class="btn"
+                                style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; font-weight: 600; padding: 6px 12px; border-radius: 6px; font-size: 12px;">
+                                <i class="bi bi-hourglass-split"></i> Mark Ordered
+                            </button>
+                        </form>
+                        <form action="{{ url_for('update_reorder_status', id=order.id) }}" method="POST"
+                            class="d-inline">
+                            <input type="hidden" name="status" value="Received">
+                            <button type="submit" class="btn"
+                                style="background: linear-gradient(135deg, #42d5b3 0%, #2db89b 100%); color: white; border: none; font-weight: 600; padding: 6px 12px; border-radius: 6px; font-size: 12px;">
+                                <i class="bi bi-truck"></i> Mark Received
+                            </button>
+                        </form>
+                    </div>
                 </div>
                 {% endfor %}
             </div>
