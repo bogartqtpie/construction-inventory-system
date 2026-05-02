@@ -966,6 +966,13 @@ def reorder(material_id):
             )
             if sent:
                 flash(f"Reorder request recorded and email sent to {supplier.name}.", "success")
+            elif reason == "SMTP is not configured.":
+                flash("Reorder request recorded successfully.", "success")
+                flash(
+                    "Supplier email was not sent: this deployment has no SMTP settings "
+                    "(SMTP_HOST, MAIL_FROM, etc.). Configure them on the host if you want automatic emails.",
+                    "info",
+                )
             else:
                 flash(
                     f"Reorder request recorded, but email was not sent ({reason}).",
