@@ -221,49 +221,73 @@ def material_is_low_stock(m):
     return m.quantity <= m.reorder_point
 
 
+def _is_request_item_low(req):
+    material = req.material
+    if not material:
+        return False
+    if req.variant:
+        return float(req.variant.quantity or 0.0) <= float(material.reorder_point or 0.0)
+    if material.variants:
+        return any(float(v.quantity or 0.0) <= float(material.reorder_point or 0.0) for v in material.variants)
+    return float(material.quantity or 0.0) <= float(material.reorder_point or 0.0)
+
+
+def _archive_stale_active_reorders():
+    changed = False
+    active_requests = (
+        ReorderRequest.query
+        .filter(
+            ReorderRequest.dismissed == False,
+            ReorderRequest.status.in_(["Pending", "Ordered"]),
+        )
+        .options(
+            joinedload(ReorderRequest.material).joinedload(Material.variants),
+            joinedload(ReorderRequest.variant),
+        )
+        .all()
+    )
+    for req in active_requests:
+        if not _is_request_item_low(req):
+            req.dismissed = True
+            changed = True
+    if changed:
+        db.session.commit()
+
+
 def _auto_create_reorder_request_if_needed(material, variant=None):
     """
-    Automatically create a ReorderRequest when quantity drops below reorder_point.
-    Only creates if there's no existing Pending or Ordered request.
+    Keep notification lifecycle clean for low-stock events.
+
+    Behavior:
+    - When stock recovers above reorder point, clear dismissed flag and close
+      stale active requests for this material/variant.
+    - When stock is low, do not auto-create reorder requests. Reorders should
+      be created only through explicit user action from the notification/order UI.
     """
     if not material or material.reorder_point <= 0:
         return
 
-    # Reset dismiss flag if quantity goes back above threshold
+    # Reset dismiss flag if quantity goes back above threshold and archive
+    # active requests so the next low-stock event starts fresh.
     current_qty = variant.quantity if variant else material.quantity
     if current_qty > material.reorder_point:
         material.dismiss_notification = False
+        active_q = ReorderRequest.query.filter(
+            ReorderRequest.material_id == material.id,
+            ReorderRequest.status.in_(["Pending", "Ordered"]),
+            ReorderRequest.dismissed == False,
+        )
+        if variant:
+            active_q = active_q.filter(ReorderRequest.variant_id == variant.id)
+        else:
+            active_q = active_q.filter(ReorderRequest.variant_id.is_(None))
+        for req in active_q.all():
+            req.dismissed = True
         return
 
-    # Check if quantity is now below threshold
-    if current_qty > material.reorder_point:
-        return
-
-    # Check if there's already an active request (Pending or Ordered)
-    existing = ReorderRequest.query.filter(
-        ReorderRequest.material_id == material.id,
-        ReorderRequest.variant_id == (variant.id if variant else None),
-        ReorderRequest.status.in_(["Pending", "Ordered"]),
-        ReorderRequest.dismissed == False
-    ).first()
-
-    if existing:
-        return
-
-    # Create new auto-generated reorder request
-    # Use supplier from material if available
-    default_qty = max(material.reorder_point - current_qty, 1.0)
-
-    new_request = ReorderRequest(
-        material_id=material.id,
-        variant_id=variant.id if variant else None,
-        supplier_id=material.supplier_id,
-        quantity=default_qty,
-        notes="Auto-generated: Stock fell below reorder point",
-        status="Pending",
-        dismissed=False
-    )
-    db.session.add(new_request)
+    # Intentionally do nothing while low. Manual reorder action should create
+    # the request and switch UI from Order/Low Stock to Mark Received/Pending.
+    return
 
 
 def count_low_notifications():
@@ -281,6 +305,7 @@ def count_low_notifications():
 
 
 def count_pending_notifications():
+    _archive_stale_active_reorders()
     count = 0
     pending_requests = (
         ReorderRequest.query
@@ -340,10 +365,18 @@ def build_low_stock_rows():
         row.qty = total
         row.unit = m.unit
         row.pred_days = None
-        row.reorder_requests = ReorderRequest.query.filter_by(
-            material_id=m.id,
-            dismissed=False
-        ).all()
+        # Show only active requests for action buttons.
+        # Received requests are historical and should not lock the item UI.
+        row.reorder_requests = (
+            ReorderRequest.query
+            .filter(
+                ReorderRequest.material_id == m.id,
+                ReorderRequest.dismissed == False,
+                ReorderRequest.status.in_(["Pending", "Ordered"]),
+            )
+            .order_by(ReorderRequest.id.desc())
+            .all()
+        )
 
         rows.append(row)
 
@@ -545,6 +578,8 @@ def _send_password_reset_email(target_email, reset_link):
     smtp_password = os.environ.get("SMTP_PASSWORD")
     smtp_use_tls = os.environ.get(
         "SMTP_USE_TLS", "true").lower() in ("1", "true", "yes")
+    smtp_use_ssl = os.environ.get(
+        "SMTP_USE_SSL", "false").lower() in ("1", "true", "yes")
     mail_from = os.environ.get(
         "MAIL_FROM", DEFAULT_SYSTEM_EMAIL) or smtp_username
 
@@ -556,13 +591,29 @@ def _send_password_reset_email(target_email, reset_link):
     message["From"] = mail_from
     message["To"] = target_email
 
-    with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as smtp:
-        if smtp_use_tls:
-            smtp.starttls()
-        if smtp_username and smtp_password:
-            smtp.login(smtp_username, smtp_password)
-        smtp.sendmail(mail_from, [target_email], message.as_string())
-    return True
+    # Auto behavior:
+    # - Port 465 => SSL by default
+    # - Other ports => plain SMTP + STARTTLS when enabled
+    if smtp_port == 465 and not smtp_use_ssl:
+        smtp_use_ssl = True
+        smtp_use_tls = False
+
+    try:
+        if smtp_use_ssl:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=20) as smtp:
+                if smtp_username and smtp_password:
+                    smtp.login(smtp_username, smtp_password)
+                smtp.sendmail(mail_from, [target_email], message.as_string())
+        else:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as smtp:
+                if smtp_use_tls:
+                    smtp.starttls()
+                if smtp_username and smtp_password:
+                    smtp.login(smtp_username, smtp_password)
+                smtp.sendmail(mail_from, [target_email], message.as_string())
+        return True
+    except Exception:
+        return False
 
 
 def _send_reorder_email(material, supplier, quantity, notes, variant=None):
@@ -572,6 +623,8 @@ def _send_reorder_email(material, supplier, quantity, notes, variant=None):
     smtp_password = os.environ.get("SMTP_PASSWORD")
     smtp_use_tls = os.environ.get(
         "SMTP_USE_TLS", "true").lower() in ("1", "true", "yes")
+    smtp_use_ssl = os.environ.get(
+        "SMTP_USE_SSL", "false").lower() in ("1", "true", "yes")
     mail_from = os.environ.get(
         "MAIL_FROM", DEFAULT_SYSTEM_EMAIL) or smtp_username
 
@@ -599,13 +652,29 @@ def _send_reorder_email(material, supplier, quantity, notes, variant=None):
     message["From"] = mail_from
     message["To"] = supplier.email
 
-    with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as smtp:
-        if smtp_use_tls:
-            smtp.starttls()
-        if smtp_username and smtp_password:
-            smtp.login(smtp_username, smtp_password)
-        smtp.sendmail(mail_from, [supplier.email], message.as_string())
-    return True, ""
+    # Auto behavior:
+    # - Port 465 => SSL by default
+    # - Other ports => plain SMTP + STARTTLS when enabled
+    if smtp_port == 465 and not smtp_use_ssl:
+        smtp_use_ssl = True
+        smtp_use_tls = False
+
+    try:
+        if smtp_use_ssl:
+            with smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=20) as smtp:
+                if smtp_username and smtp_password:
+                    smtp.login(smtp_username, smtp_password)
+                smtp.sendmail(mail_from, [supplier.email], message.as_string())
+        else:
+            with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as smtp:
+                if smtp_use_tls:
+                    smtp.starttls()
+                if smtp_username and smtp_password:
+                    smtp.login(smtp_username, smtp_password)
+                smtp.sendmail(mail_from, [supplier.email], message.as_string())
+        return True, ""
+    except Exception as e:
+        return False, str(e)
 
 
 def analyze_weather(data):
@@ -841,8 +910,6 @@ def checkout():
     db.session.add(sale)
     db.session.flush()
 
-    auto_reordered_items = []
-
     for item in cart:
         mid = int(item["id"])
         qty = float(item.get("qty", 0))
@@ -866,19 +933,9 @@ def checkout():
         if vid:
             v = MaterialVariant.query.get(vid)
             v.quantity -= qty
-            # Check if this triggers auto-reorder
-            was_above = (float(v.quantity or 0.0) + qty) > m.reorder_point
-            is_below = v.quantity <= m.reorder_point
-            if was_above and is_below:
-                auto_reordered_items.append(f"{m.name} - {v.name}")
             _auto_create_reorder_request_if_needed(m, v)
         else:
             m.quantity -= qty
-            # Check if this triggers auto-reorder
-            was_above = (float(m.quantity or 0.0) + qty) > m.reorder_point
-            is_below = m.quantity <= m.reorder_point
-            if was_above and is_below:
-                auto_reordered_items.append(m.name)
             _auto_create_reorder_request_if_needed(m)
 
     print(data)
@@ -890,9 +947,6 @@ def checkout():
         "success": True,
         "updated_inventory": inventory_json_payload()
     }
-    if auto_reordered_items:
-        response["auto_reordered"] = auto_reordered_items
-        response["message"] = f"Reorder notifications created for: {', '.join(auto_reordered_items)}"
 
     return jsonify(response)
 
@@ -1083,6 +1137,8 @@ def update_reorder_status(id):
         material = rr.material
         variant = rr.variant
         added_qty = float(rr.quantity or 0.0)
+        # Mark this request done so it no longer controls notification actions.
+        rr.dismissed = True
         if added_qty > 0:
             if variant:
                 variant.quantity = float(variant.quantity or 0.0) + added_qty
@@ -1115,6 +1171,7 @@ def update_reorder_status(id):
 @app.route("/notifications")
 @login_required
 def notifications():
+    _archive_stale_active_reorders()
     low = build_low_stock_rows()
     pending_reorders = (
         ReorderRequest.query

@@ -38,17 +38,9 @@
                     <div class="d-flex gap-2" style="align-items: center;">
                         <form action="{{ url_for('update_reorder_status', id=order.id) }}" method="POST"
                             class="d-inline">
-                            <input type="hidden" name="status" value="Ordered">
-                            <button type="submit" class="btn"
-                                style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; font-weight: 600; padding: 6px 12px; border-radius: 6px; font-size: 12px;">
-                                <i class="bi bi-hourglass-split"></i> Mark Ordered
-                            </button>
-                        </form>
-                        <form action="{{ url_for('update_reorder_status', id=order.id) }}" method="POST"
-                            class="d-inline">
                             <input type="hidden" name="status" value="Received">
                             <button type="submit" class="btn"
-                                style="background: linear-gradient(135deg, #42d5b3 0%, #2db89b 100%); color: white; border: none; font-weight: 600; padding: 6px 12px; border-radius: 6px; font-size: 12px;">
+                                style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; font-weight: 600; padding: 6px 12px; border-radius: 6px; font-size: 12px;">
                                 <i class="bi bi-truck"></i> Mark Received
                             </button>
                         </form>
@@ -83,24 +75,7 @@
 
                 <div class="d-flex align-items-center gap-2" style="flex-wrap: wrap; justify-content: flex-end;">
                     {% set reorder = n.reorder_requests|first %}
-
                     {% if reorder %}
-                    {% if reorder.status == 'Pending' %}
-                    <form action="{{ url_for('update_reorder_status', id=reorder.id) }}" method="POST" class="d-inline">
-                        <input type="hidden" name="status" value="Ordered">
-                        <button type="submit" class="btn"
-                            style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; font-weight: 600; padding: 6px 12px; border-radius: 6px; font-size: 12px; transition: all 0.3s ease; box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);"
-                            onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 16px rgba(102, 126, 234, 0.35)'"
-                            onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(102, 126, 234, 0.2)'">
-                            <i class="bi bi-hourglass-split"></i> Mark Ordered
-                        </button>
-                    </form>
-                    <span class="badge"
-                        style="background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); color: white; padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;">
-                        <i class="bi bi-clock-history"></i> Pending
-                    </span>
-
-                    {% elif reorder.status == 'Ordered' %}
                     <form action="{{ url_for('update_reorder_status', id=reorder.id) }}" method="POST" class="d-inline">
                         <input type="hidden" name="status" value="Received">
                         <button type="submit" class="btn"
@@ -111,21 +86,9 @@
                         </button>
                     </form>
                     <span class="badge"
-                        style="background: linear-gradient(135deg, #3498db 0%, #2980b9 100%); color: white; padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;">
-                        <i class="bi bi-truck"></i> Ordered
+                        style="background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); color: white; padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;">
+                        <i class="bi bi-clock-history"></i> Pending
                     </span>
-
-                    {% elif reorder.status == 'Received' %}
-                    <button class="btn"
-                        style="background: #d3d3d3; color: #666; border: none; font-weight: 600; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: not-allowed;"
-                        disabled>
-                        <i class="bi bi-check2-circle"></i> Completed
-                    </button>
-                    <span class="badge"
-                        style="background: linear-gradient(135deg, #42d5b3 0%, #27a887 100%); color: white; padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;">
-                        <i class="bi bi-check-circle"></i> Received
-                    </span>
-                    {% endif %}
                     {% else %}
                     <a href="{{ url_for('reorder', material_id=n.id) }}" class="btn"
                         style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; font-weight: 600; padding: 6px 12px; border-radius: 6px; font-size: 12px; text-decoration: none; transition: all 0.3s ease; box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);"
@@ -134,8 +97,8 @@
                         <i class="bi bi-cart-plus"></i> Order
                     </a>
                     <span class="badge"
-                        style="background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%); color: white; padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;">
-                        <i class="bi bi-dash-circle"></i> No Order Yet
+                        style="background: linear-gradient(135deg, #f39c12 0%, #e67e22 100%); color: white; padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;">
+                        <i class="bi bi-exclamation-circle"></i> Low Stock
                     </span>
                     {% endif %}
                     <a href="{{ url_for('dismiss_notification', material_id=n.id) }}" class="btn"
