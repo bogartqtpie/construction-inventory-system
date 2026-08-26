@@ -4,7 +4,7 @@ from io import StringIO
 import os
 import requests
 import smtplib
-from datetime import datetime
+from datetime import datetime, timedelta
 from email.mime.text import MIMEText
 from functools import wraps
 from flask_migrate import Migrate
@@ -677,11 +677,57 @@ def _send_reorder_email(material, supplier, quantity, notes, variant=None):
         return False, str(e)
 
 
+def _weather_plain_labels(condition):
+    """Map API condition codes to plain language for inventory users."""
+    c = (condition or "").lower()
+    if any(k in c for k in ("thunder", "storm")):
+        return {
+            "label": "Storms likely",
+            "hint": "Hold outdoor deliveries if you can",
+            "work": "poor",
+        }
+    if any(k in c for k in ("rain", "drizzle")):
+        return {
+            "label": "Rain expected",
+            "hint": "Keep cement, sand & wood covered",
+            "work": "poor",
+        }
+    if any(k in c for k in ("mist", "fog", "haze")):
+        return {
+            "label": "Misty / foggy",
+            "hint": "Travel to sites may be slower",
+            "work": "fair",
+        }
+    if any(k in c for k in ("cloud", "overcast")):
+        return {
+            "label": "Cloudy",
+            "hint": "Deliveries should still be fine",
+            "work": "good",
+        }
+    if any(k in c for k in ("clear", "sun")):
+        return {
+            "label": "Sunny",
+            "hint": "Good day for outdoor work",
+            "work": "good",
+        }
+    return {
+        "label": condition or "Check the sky",
+        "hint": "Confirm before large outdoor orders",
+        "work": "fair",
+    }
+
+
 def analyze_weather(data):
     weather_list = data.get("list", [])
     total_count = len(weather_list)
     if total_count == 0:
-        return ["No forecast data available for analysis."]
+        return {
+            "level": "unknown",
+            "badge": "No forecast",
+            "headline": "Weather is unavailable right now",
+            "summary": "We could not load the next few days. Try again later.",
+            "tips": [],
+        }
 
     # x = time index (3-hour forecast slots), y = rain signal (0 or 1)
     x_values = []
@@ -703,33 +749,55 @@ def analyze_weather(data):
 
     y = (sum(predicted) / len(predicted)) if predicted else 0.0
 
-    suggestions = []
-
     if y > 0.6:
-        suggestions.append(
-            "Linear regression forecast: high rain risk in the next 24 hours.")
-        suggestions.append("Reduce outdoor material orders by around 30-50%.")
-        suggestions.append(
-            "Prioritize covered storage for cement, sand, CHB, and wood products.")
+        return {
+            "level": "high",
+            "badge": "Expect rain",
+            "headline": "Plan as if it will rain in the next day",
+            "summary": (
+                "Wet weather is likely. Outdoor jobs and uncovered deliveries "
+                "may be delayed, and cement or wood left outside can get ruined."
+            ),
+            "tips": [
+                "Hold extra outdoor orders for now — buy only what you need soon.",
+                "Move cement, sand, CHB, and wood under a roof or tarp.",
+                "Suggest indoor or covered work if customers ask about site jobs.",
+            ],
+        }
 
-    elif y > 0.3:
-        suggestions.append(
-            "Linear regression forecast: moderate rain risk in the next 24 hours.")
-        suggestions.append(
-            "Reduce outdoor material orders moderately (around 15-25%).")
+    if y > 0.3:
+        return {
+            "level": "moderate",
+            "badge": "Showers possible",
+            "headline": "It might rain — keep covers ready",
+            "summary": (
+                "Some rain is possible in the next day. Work can still go on, "
+                "but keep weather-sensitive stock protected just in case."
+            ),
+            "tips": [
+                "Don’t over-order outdoor materials until the sky clears.",
+                "Have tarps or covered storage ready.",
+            ],
+        }
 
-    else:
-        suggestions.append(
-            "Linear regression forecast: low rain risk in the next 24 hours.")
-        suggestions.append("Maintain standard inventory levels.")
-
-    suggestions.append(f"Predicted rain risk score: {y:.2f}")
-
-    return suggestions
+    return {
+        "level": "low",
+        "badge": "Mostly dry",
+        "headline": "Little rain expected — business as usual",
+        "summary": (
+            "The next day looks mostly dry. Normal ordering, deliveries, "
+            "and outdoor work should be fine."
+        ),
+        "tips": [
+            "Keep your usual stock levels.",
+            "Good time for outdoor deliveries and site work.",
+        ],
+    }
 
 
 def build_weather_days(data, max_days=5):
     by_day = {}
+    today = datetime.now().date()
 
     for item in data.get("list", []):
         ts = item.get("dt")
@@ -764,18 +832,33 @@ def build_weather_days(data, max_days=5):
         day_data = by_day[day]
         temps = day_data["temps"]
         conditions = day_data["conditions"]
+        date_obj = day_data["date_obj"]
+        day_date = date_obj.date()
 
         top_condition = "Unknown"
         if conditions:
             top_condition = max(conditions.items(), key=lambda x: x[1])[0]
 
+        plain = _weather_plain_labels(top_condition)
+
+        if day_date == today:
+            day_name = "Today"
+        elif day_date == today + timedelta(days=1):
+            day_name = "Tomorrow"
+        else:
+            day_name = date_obj.strftime("%a")
+
         days.append(
             {
-                "day_name": day_data["date_obj"].strftime("%a"),
-                "date_label": day_data["date_obj"].strftime("%b %d"),
+                "day_name": day_name,
+                "date_label": date_obj.strftime("%b %d"),
                 "min_temp": round(min(temps), 1) if temps else None,
                 "max_temp": round(max(temps), 1) if temps else None,
                 "condition": top_condition,
+                "plain_label": plain["label"],
+                "plain_hint": plain["hint"],
+                "work": plain["work"],
+                "is_today": day_date == today,
             }
         )
 
@@ -842,7 +925,7 @@ def index():
 
     if not weather_data:
         warning = "Weather data not available. Check API key or internet connection."
-        advice = []
+        advice = None
         weather_days = []
     else:
         warning = None

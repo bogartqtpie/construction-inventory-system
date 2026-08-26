@@ -66,6 +66,72 @@
         font-weight: 600;
     }
 
+    .weather-hint {
+        font-size: 0.72rem;
+        opacity: 0.9;
+        line-height: 1.25;
+        margin-top: 4px;
+        min-height: 2.2em;
+    }
+
+    .weather-day.is-today {
+        background: rgba(255, 255, 255, 0.22);
+        border-color: rgba(255, 255, 255, 0.45);
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15);
+    }
+
+    .weather-day.work-poor {
+        border-left: 3px solid #ffc107;
+    }
+
+    .weather-outlook {
+        background: rgba(0, 0, 0, 0.15);
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-bottom: 14px;
+    }
+
+    .weather-outlook.level-high {
+        background: rgba(180, 40, 40, 0.28);
+    }
+
+    .weather-outlook.level-moderate {
+        background: rgba(180, 120, 20, 0.28);
+    }
+
+    .weather-outlook.level-low {
+        background: rgba(30, 120, 60, 0.28);
+    }
+
+    .weather-outlook-badge {
+        display: inline-block;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+        padding: 2px 8px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.2);
+        margin-bottom: 6px;
+    }
+
+    .weather-tips {
+        margin-top: 14px;
+        padding-top: 12px;
+        border-top: 1px solid rgba(255, 255, 255, 0.25);
+    }
+
+    .weather-tips ul {
+        margin-bottom: 0;
+        padding-left: 1.15rem;
+    }
+
+    .weather-sub {
+        font-size: 0.88rem;
+        opacity: 0.92;
+        margin: 0;
+    }
+
     #cart-table th,
     #cart-table td,
     #inventory-table th,
@@ -624,15 +690,26 @@
         <div class="col-12">
             <div class="card weather-news-card border-0">
                 <div class="card-body p-4">
-                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-                        <h5 class="mb-0"><i class="bi bi-broadcast"></i> Weather Report</h5>
-                        <div class="fw-semibold">{{ weather_days[0].date_label }} - {{ weather_days[-1].date_label }}
+                    <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                        <div>
+                            <h5 class="mb-1"><i class="bi bi-cloud-sun"></i> Weather for your stock</h5>
+                            <p class="weather-sub">Quezon City · what the next few days mean for orders, deliveries &amp; storage</p>
                         </div>
+                        <div class="fw-semibold small opacity-90">{{ weather_days[0].date_label }} – {{ weather_days[-1].date_label }}</div>
                     </div>
+
+                    {% if advice %}
+                    <div class="weather-outlook level-{{ advice.level }}">
+                        <div class="weather-outlook-badge">{{ advice.badge or 'Forecast' }}</div>
+                        <div class="fw-bold">{{ advice.headline }}</div>
+                        <p class="mb-0 mt-1 small">{{ advice.summary }}</p>
+                    </div>
+                    {% endif %}
+
                     <div class="weather-days-grid">
                         {% for d in weather_days %}
                         {% set c = d.condition|lower %}
-                        <div class="weather-day">
+                        <div class="weather-day {% if d.is_today %}is-today{% endif %} work-{{ d.work }}">
                             <div class="fw-semibold">{{ d.day_name }}</div>
                             <div class="weather-label">{{ d.date_label }}</div>
                             <span class="weather-icon">
@@ -644,19 +721,21 @@
                                 <i class="bi bi-sun-fill"></i>
                                 {% endif %}
                             </span>
-                            <div class="weather-label">{{ d.condition }}</div>
+                            <div class="weather-label fw-semibold">{{ d.plain_label }}</div>
                             {% if d.min_temp is not none and d.max_temp is not none %}
-                            <div class="weather-temp">{{ d.min_temp }}&deg;C - {{ d.max_temp }}&deg;C</div>
+                            <div class="weather-temp">{{ d.min_temp|int }}–{{ d.max_temp|int }}&deg;C</div>
                             {% endif %}
+                            <div class="weather-hint">{{ d.plain_hint }}</div>
                         </div>
                         {% endfor %}
                     </div>
-                    {% if advice %}
-                    <div class="mt-3 pt-2" style="border-top: 1px solid rgba(255,255,255,0.25);">
-                        <div class="small fw-semibold mb-1">Inventory Advice</div>
-                        <ul class="mb-0 small">
-                            {% for item in advice %}
-                            <li>{{ item }}</li>
+
+                    {% if advice and advice.tips %}
+                    <div class="weather-tips">
+                        <div class="small fw-semibold mb-1"><i class="bi bi-lightbulb"></i> Suggested next steps</div>
+                        <ul class="small">
+                            {% for tip in advice.tips %}
+                            <li>{{ tip }}</li>
                             {% endfor %}
                         </ul>
                     </div>
